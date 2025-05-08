@@ -6,6 +6,7 @@ package tpm2
 
 import (
 	"crypto/elliptic"
+	"fmt"
 )
 
 // This file contains types defined in section 6 (Contants) in
@@ -221,131 +222,515 @@ const (
 type ResponseCode uint32
 
 const (
-	// The lower 7-bits of format-zero error codes are the error number.
-	responseCodeE0 ResponseCode = 0x7f
+	// ResponseSuccess corresponds to TPM_RC_SUCCESS and indicates success.
+	ResponseSuccess ResponseCode = 0x000
 
-	// The lower 6-bits of format-one error codes are the error number.
-	responseCodeE1 ResponseCode = 0x3f
+	// ResponseBadTag corresponds to TPM_RC_BAD_TAG and is returned from
+	// TPM1.2 devices which don't recognise the TPM2 command tags
+	// (TPM_ST_NO_SESSIONS and TPM_ST_SESSIONS).
+	ResponseBadTag ResponseCode = 0x01e // TPM_RC_BAD_TAG
 
-	// Bit 6 of format-one errors is zero for errors associated with a handle
-	// or session, or one for errors associated with a parameter.
-	responseCodeP ResponseCode = 1 << 6
+	// rcVer1 corresponds to RC_VER1 and is the base of all TCG defined
+	// format-zero TPM2 error codes.
+	rcVer1 ResponseCode = 0x100
 
-	// Bit 7 indicates whether the error is a format-zero (0) or format-one code (1)
-	responseCodeF ResponseCode = 1 << 7
+	ResponseInitialize      ResponseCode = rcVer1 + 0x000 // TPM_RC_INITIALIZE
+	ResponseFailure         ResponseCode = rcVer1 + 0x001 // TPM_RC_FAILURE
+	ResponseSequence        ResponseCode = rcVer1 + 0x003 // TPM_RC_SEQUENCE
+	ResponseDisabled        ResponseCode = rcVer1 + 0x020 // TPM_RC_DISABLED
+	ResponseExclusive       ResponseCode = rcVer1 + 0x021 // TPM_RC_EXCLUSIVE
+	ResponseAuthType        ResponseCode = rcVer1 + 0x024 // TPM_RC_AUTH_TYPE
+	ResponseAuthMissing     ResponseCode = rcVer1 + 0x025 // TPM_RC_AUTH_MISSING
+	ResponsePolicy          ResponseCode = rcVer1 + 0x026 // TPM_RC_POLICY
+	ResponsePCR             ResponseCode = rcVer1 + 0x027 // TPM_RC_PCR
+	ResponsePCRChanged      ResponseCode = rcVer1 + 0x028 // TPM_RC_PCR_CHANGED
+	ResponseUpgrade         ResponseCode = rcVer1 + 0x02d // TPM_RC_UPGRADE
+	ResponseTooManyContexts ResponseCode = rcVer1 + 0x02e // TPM_RC_TOO_MANY_CONTEXTS
+	ResponseAuthUnavailable ResponseCode = rcVer1 + 0x02f // TPM_RC_AUTH_UNAVAILABLE
+	ResponseReboot          ResponseCode = rcVer1 + 0x030 // TPM_RC_REBOOT
+	ResponseUnbalanced      ResponseCode = rcVer1 + 0x031 // TPM_RC_UNBALANCED
+	ResponseCommandSize     ResponseCode = rcVer1 + 0x042 // TPM_RC_COMMAND_SIZE
+	ResponseCommandCode     ResponseCode = rcVer1 + 0x043 // TPM_RC_COMMAND_CODE
+	ResponseAuthsize        ResponseCode = rcVer1 + 0x044 // TPM_RC_AUTHSIZE
+	ResponseAuthContext     ResponseCode = rcVer1 + 0x045 // TPM_RC_AUTH_CONTEXT
+	ResponseNVRange         ResponseCode = rcVer1 + 0x046 // TPM_RC_NV_RANGE
+	ResponseNVSize          ResponseCode = rcVer1 + 0x047 // TPM_RC_NV_SIZE
+	ResponseNVLocked        ResponseCode = rcVer1 + 0x048 // TPM_RC_NV_LOCKED
+	ResponseNVAuthorization ResponseCode = rcVer1 + 0x049 // TPM_RC_NV_AUTHORIZATION
+	ResponseNVUninitialized ResponseCode = rcVer1 + 0x04a // TPM_RC_NV_UNINITIALIZED
+	ResponseNVSpace         ResponseCode = rcVer1 + 0x04b // TPM_RC_NV_SPACE
+	ResponseNVDefined       ResponseCode = rcVer1 + 0x04c // TPM_RC_NV_DEFINED
+	ResponseBadContext      ResponseCode = rcVer1 + 0x050 // TPM_RC_BAD_CONTEXT
+	ResponseCpHash          ResponseCode = rcVer1 + 0x051 // TPM_RC_CPHASH
+	ResponseParent          ResponseCode = rcVer1 + 0x052 // TPM_RC_PARENT
+	ResponseNeedsTest       ResponseCode = rcVer1 + 0x053 // TPM_RC_NEEDS_TEST
+	ResponseNoResult        ResponseCode = rcVer1 + 0x054 // TPM_RC_NO_RESULT
+	ResponseSensitive       ResponseCode = rcVer1 + 0x055 // TPM_RC_SENSITIVE
 
-	// Bit 8 of format-zero errors is zero for TPM1.2 errors and one for TPM2 errors.
-	responseCodeV ResponseCode = 1 << 8
+	// rcMaxFM0 corresponds to RC_MAX_FM0 and is the maxmimum TCG defined format-zero
+	// TPM2 error.
+	rcMaxFM0 ResponseCode = rcVer1 + 0x07f
 
-	// Bit 10 of format-zero errors is zero for TCG defined errors and one for vendor
-	// defined error.
-	responseCodeT ResponseCode = 1 << 10
+	// rcFmt1 corresponds to RC_FMT1 and is the base of all format-one errors.
+	rcFmt1 ResponseCode = 0x080
 
-	// Bit 11 of format-zero errors is zero for errors and one for warnings.
-	responseCodeS ResponseCode = 1 << 11
+	ResponseAsymmetric   ResponseCode = rcFmt1 + 0x001 // TPM_RC_ASYMMETRIC
+	ResponseAttributes   ResponseCode = rcFmt1 + 0x002 // TPM_RC_ATTRIBUTES
+	ResponseHash         ResponseCode = rcFmt1 + 0x003 // TPM_RC_HASH
+	ResponseValue        ResponseCode = rcFmt1 + 0x004 // TPM_RC_VALUE
+	ResponseHierarchy    ResponseCode = rcFmt1 + 0x005 // TPM_RC_HIERARCHY
+	ResponseKeySize      ResponseCode = rcFmt1 + 0x007 // TPM_RC_KEY_SIZE
+	ResponseMGF          ResponseCode = rcFmt1 + 0x008 // TPM_RC_MGF
+	ResponseMode         ResponseCode = rcFmt1 + 0x009 // TPM_RC_MODE
+	ResponseType         ResponseCode = rcFmt1 + 0x00a // TPM_RC_TYPE
+	ResponseHandle       ResponseCode = rcFmt1 + 0x00b // TPM_RC_HANDLE
+	ResponseKDF          ResponseCode = rcFmt1 + 0x00c // TPM_RC_KDF
+	ResponseRange        ResponseCode = rcFmt1 + 0x00d // TPM_RC_RANGE
+	ResponseAuthFail     ResponseCode = rcFmt1 + 0x00e // TPM_RC_AUTH_FAIL
+	ResponseNonce        ResponseCode = rcFmt1 + 0x00f // TPM_RC_NONCE
+	ResponsePP           ResponseCode = rcFmt1 + 0x010 // TPM_RC_PP
+	ResponseScheme       ResponseCode = rcFmt1 + 0x012 // TPM_RC_SCHEME
+	ResponseSize         ResponseCode = rcFmt1 + 0x015 // TPM_RC_SIZE
+	ResponseSymmetric    ResponseCode = rcFmt1 + 0x016 // TPM_RC_SYMMETRIC
+	ResponseTag          ResponseCode = rcFmt1 + 0x017 // TPM_RC_TAG
+	ResponseSelector     ResponseCode = rcFmt1 + 0x018 // TPM_RC_SELECTOR
+	ResponseInsufficient ResponseCode = rcFmt1 + 0x01a // TPM_RC_INSUFFICIENT
+	ResponseSignature    ResponseCode = rcFmt1 + 0x01b // TPM_RC_SIGNATURE
+	ResponseKey          ResponseCode = rcFmt1 + 0x01c // TPM_RC_KEY
+	ResponsePolicyFail   ResponseCode = rcFmt1 + 0x01d // TPM_RC_POLICY_FAIL
+	ResponseIntegrity    ResponseCode = rcFmt1 + 0x01f // TPM_RC_INTEGRITY
+	ResponseTicket       ResponseCode = rcFmt1 + 0x020 // TPM_RC_TICKET
+	ResponseReservedBits ResponseCode = rcFmt1 + 0x021 // TPM_RC_RESERVED_BITS
+	ResponseBadAuth      ResponseCode = rcFmt1 + 0x022 // TPM_RC_BAD_AUTH
+	ResponseExpired      ResponseCode = rcFmt1 + 0x023 // TPM_RC_EXPIRED
+	ResponsePolicyCC     ResponseCode = rcFmt1 + 0x024 // TPM_RC_POLICY_CC
+	ResponseBinding      ResponseCode = rcFmt1 + 0x025 // TPM_RC_BINDING
+	ResponseCurve        ResponseCode = rcFmt1 + 0x026 // TPM_RC_CURVE
+	ResponseECCPoint     ResponseCode = rcFmt1 + 0x027 // TPM_RC_ECC_POINT
+	ResponseFWLimited    ResponseCode = rcFmt1 + 0x028 // TPM_RC_FW_LIMITED
+	ResponseSVNLimited   ResponseCode = rcFmt1 + 0x029 // TPM_RC_SVN_LIMITED
 
-	responseCodeIndex      uint8 = 0xf
-	responseCodeIndexShift uint8 = 8
+	// rcWarn corresponds to RC_WARN and is the base of all TCG defined
+	// format-zero TPM2 warning codes.
+	rcWarn ResponseCode = 0x900
 
-	// Bits 8 to 11 of format-one errors represent the parameter number if P is set
-	// or the handle or session number otherwise.
-	responseCodeN ResponseCode = ResponseCode(responseCodeIndex) << responseCodeIndexShift
+	ResponseContextGap     ResponseCode = rcWarn + 0x001 // TPM_RC_CONTEXT_GAP
+	ResponseObjectMemory   ResponseCode = rcWarn + 0x002 // TPM_RC_OBJECT_MEMORY
+	ResponseSessionMemory  ResponseCode = rcWarn + 0x003 // TPM_RC_SESSION_MEMORY
+	ResponseMemory         ResponseCode = rcWarn + 0x004 // TPM_RC_MEMORY
+	ResponseSessionHandles ResponseCode = rcWarn + 0x005 // TPM_RC_SESSION_HANDLES
+	ResponseObjectHandles  ResponseCode = rcWarn + 0x006 // TPM_RC_OBJECT_HANDLES
+	ResponseLocality       ResponseCode = rcWarn + 0x007 // TPM_RC_LOCALITY
+	ResponseYielded        ResponseCode = rcWarn + 0x008 // TPM_RC_YIELDED
+	ResponseCanceled       ResponseCode = rcWarn + 0x009 // TPM_RC_CANCELED
+	ResponseTesting        ResponseCode = rcWarn + 0x00a // TPM_RC_TESTING
+	ResponseReferenceH0    ResponseCode = rcWarn + 0x010 // TPM_RC_REFERENCE_H0
+	ResponseReferenceH1    ResponseCode = rcWarn + 0x011 // TPM_RC_REFERENCE_H1
+	ResponseReferenceH2    ResponseCode = rcWarn + 0x012 // TPM_RC_REFERENCE_H2
+	ResponseReferenceH3    ResponseCode = rcWarn + 0x013 // TPM_RC_REFERENCE_H3
+	ResponseReferenceH4    ResponseCode = rcWarn + 0x014 // TPM_RC_REFERENCE_H4
+	ResponseReferenceH5    ResponseCode = rcWarn + 0x015 // TPM_RC_REFERENCE_H5
+	ResponseReferenceH6    ResponseCode = rcWarn + 0x016 // TPM_RC_REFERENCE_H6
+	ResponseReferenceS0    ResponseCode = rcWarn + 0x018 // TPM_REFERENCE_S0
+	ResponseReferenceS1    ResponseCode = rcWarn + 0x019 // TPM_REFERENCE_S1
+	ResponseReferenceS2    ResponseCode = rcWarn + 0x01a // TPM_REFERENCE_S2
+	ResponseReferenceS3    ResponseCode = rcWarn + 0x01b // TPM_REFERENCE_S3
+	ResponseReferenceS4    ResponseCode = rcWarn + 0x01c // TPM_REFERENCE_S4
+	ResponseReferenceS5    ResponseCode = rcWarn + 0x01d // TPM_REFERENCE_S5
+	ResponseReferenceS6    ResponseCode = rcWarn + 0x01e // TPM_REFERENCE_S6
+	ResponseNVRate         ResponseCode = rcWarn + 0x020 // TPM_RC_RATE
+	ResponseLockout        ResponseCode = rcWarn + 0x021 // TPM_RC_LOCKOUT
+	ResponseRetry          ResponseCode = rcWarn + 0x022 // TPM_RC_RETRY
+	ResponseNVUnavailable  ResponseCode = rcWarn + 0x023 // TPM_RC_NV_UNAVAILABLE
+
+	// ResponseH corresponds to TPM_RC_H and is added to a handle related error.
+	ResponseH ResponseCode = 0x000
+
+	// ResponseP corresponds to TPM_RC_P and is added to a parameter related error.
+	ResponseP ResponseCode = 0x040
+
+	// RespondsS corresponds to TPM_RC_S and is added to a session related error.
+	ResponseS ResponseCode = 0x800
+
+	// Response1 corresponds to TPM_RC_1 and is added to a handle, parameter or
+	// session related error.
+	Response1 ResponseCode = 0x100
+
+	// Response2 corresponds to TPM_RC_2 and is added to a handle, parameter or
+	// session related error.
+	Response2 ResponseCode = 0x200
+
+	// Response3 corresponds to TPM_RC_3 and is added to a handle, parameter or
+	// session related error.
+	Response3 ResponseCode = 0x300
+
+	// Response4 corresponds to TPM_RC_4 and is added to a handle, parameter or
+	// session related error.
+	Response4 ResponseCode = 0x400
+
+	// Response5 corresponds to TPM_RC_5 and is added to a handle, parameter or
+	// session related error.
+	Response5 ResponseCode = 0x500
+
+	// Response6 corresponds to TPM_RC_6 and is added to a handle, parameter or
+	// session related error.
+	Response6 ResponseCode = 0x600
+
+	// Response7 corresponds to TPM_RC_7 and is added to a handle, parameter or
+	// session related error.
+	Response7 ResponseCode = 0x700
+
+	// Response8 corresponds to TPM_RC_8 and is added to a parameter related error.
+	Response8 ResponseCode = 0x800
+
+	// Response9 corresponds to TPM_RC_9 and is added to a parameter related error.
+	Response9 ResponseCode = 0x900
+
+	// ResponseA corresponds to TPM_RC_A and is added to a parameter related error.
+	ResponseA ResponseCode = 0xa00
+
+	// ResponseB corresponds to TPM_RC_B and is added to a parameter related error.
+	ResponseB ResponseCode = 0xb00
+
+	// ResponseC corresponds to TPM_RC_C and is added to a parameter related error.
+	ResponseC ResponseCode = 0xc00
+
+	// ResponseD corresponds to TPM_RC_D and is added to a parameter related error.
+	ResponseD ResponseCode = 0xd00
+
+	// ResponseE corresponds to TPM_RC_E and is added to a parameter related error.
+	ResponseE ResponseCode = 0xe00
+
+	// ResponseF corresponds to TPM_RC_F and is added to a parameter related error.
+	ResponseF ResponseCode = 0xf00
+
+	// ResponseNMask corresponds to TPM_RC_N_MASK and indicates the associated handle,
+	// parameter or session depending on the status of ResponseH, ResponseP or ResponseS.
+	ResponseNMask ResponseCode = 0xf00
+
+	// rcE0 corresponds to the error code (bits 0-6) of format-zero response codes.
+	rcE0 ResponseCode = 0x07f
+
+	// rcE1 corresponds to the error code (bits 0-5) of format-one response codes.
+	rcE1 ResponseCode = 0x03f
+
+	// rcP corresponds to bit 6 of format-one response codes and is set for errors associated
+	// with a parameter or clear for errors associated with a handle or session.
+	rcP ResponseCode = 0x040
+
+	// rcF corresponds to bit 7 and is the format indicator. It is clear for format-zero
+	// response codes and set for format-one response codes.
+	rcF ResponseCode = 0x080
+
+	// rcV corresponds to bit 8 and is the version indicator of format-zero response codes. It
+	// is set for TPM2 response codes or clear for TPM1.2 response codes.
+	rcV ResponseCode = 0x100
+
+	// rcT corresponds to bit 10 and is the TCG/Vendor indicator of format-zero response codes.
+	// It is set for vendor defined response codes or clear for TCG defined response codes.
+	rcT ResponseCode = 0x400
+
+	// rcS corresponds to bit 11 and is the severity indicator of format-zero response codes. It
+	// is set for warnings or clear for errors.
+	rcS ResponseCode = 0x800
+
+	// rcN corresponds to bits 8 to 11 of format-one response codes and is the handle, parameter
+	// or session indicator.
+	rcN ResponseCode = 0xf00
+
+	// rcNSessionIndicator is the MSB of rcN for format-one response codes and indicates that
+	// the N field corresponds to a session if rcP field is clear.
+	rcNSessionIndicator = 0x800
+
+	// rcNShift is used to shift the bits defined by ResponseNMask.
+	rcNShift ResponseCode = 8
 )
 
-// E returns the E field of the response code, corresponding to the error number.
+func responseCodeIndexUnchecked(index uint8) ResponseCode {
+	return ResponseCode(index) << rcNShift
+}
+
+// ResponseCodeIndex returns the supplied one-indexed handle, parameter or session
+// index as a ResponseCode integer from Response1 to ResponseF that can be added to
+// a base response code. It will panic if index is greater than 0xf. An index of zero
+// is undefined.
+func ResponseCodeIndex(index uint8) ResponseCode {
+	rc := responseCodeIndexUnchecked(index)
+	if rc > ResponseF {
+		panic("invalid handle, parameter, or session index (> 0xf)")
+	}
+	return rc
+}
+
+// ResponseCodeFormat indicates the format or a response code
+type ResponseCodeFormat bool
+
+const (
+	ResponseCodeFormat0 ResponseCodeFormat = false // A format-zero response code
+	ResponseCodeFormat1 ResponseCodeFormat = true  // A format-one response code
+)
+
+// ResponseCodeIndexType indicates the type of index that a format-one response code encodes.
+type ResponseCodeIndexType uint8
+
+const (
+	ResponseCodeIndexTypeNone      ResponseCodeIndexType = 0 // No index is encoded (eg, as with format-zero response codes)
+	ResponseCodeIndexTypeHandle    ResponseCodeIndexType = 1 // A one-indexed handle index is encoded
+	ResponseCodeIndexTypeParameter ResponseCodeIndexType = 2 // A one-indexed parameter index is encoded
+	ResponseCodeIndexTypeSession   ResponseCodeIndexType = 3 // A one-indexed session index is encoded
+)
+
+// ResponseCodeVersion indicates the version of a format-zero response code.
+type ResponseCodeVersion bool
+
+const (
+	ResponseCodeVersionTPM12 ResponseCodeVersion = false // TPM1.2 response
+	ResponseCodeVersionTPM2  ResponseCodeVersion = true  // TPM2 response
+)
+
+// ResponseCodeSeverity indicates the severity of a format-zero response code.
+type ResponseCodeSeverity bool
+
+const (
+	ResponseCodeSeverityWarning ResponseCodeSeverity = false // A warning
+	ResponseCodeSeverityError   ResponseCodeSeverity = true  // An error
+)
+
+// ResponseCodeSpec indicates where a format-zero response code is defined (by
+// the TCG or TPM vendor)
+type ResponseCodeSpec bool
+
+const (
+	ResponseCodeSpecTCG    ResponseCodeSpec = false // Defined by the TCG
+	ResponseCodeSpecVendor ResponseCodeSpec = true  // Defined by the TPM vendor
+)
+
+// ResponseCodeType indicates some properties of a [ResponseCode].
+type ResponseCodeType uint8
+
+const (
+	responseCodeTypeFormatOne ResponseCodeType = 1 << 0
+	responseCodeTypeIndexType ResponseCodeType = 3 << 1
+	responseCodeTypeTPM2      ResponseCodeType = 1 << 3
+	responseCodeTypeWarning   ResponseCodeType = 1 << 4
+	responseCodeTypeVendor    ResponseCodeType = 1 << 5
+)
+
+// Format returns the format of the [ResponseCode] of this type.
+func (t ResponseCodeType) Format() ResponseCodeFormat {
+	return ResponseCodeFormat(t&responseCodeTypeFormatOne != 0)
+}
+
+// IndexType returns the type of index encoded in the [ResponseCode] of this
+// type.
+func (t ResponseCodeType) IndexType() ResponseCodeIndexType {
+	return ResponseCodeIndexType(t & responseCodeTypeIndexType >> 1)
+}
+
+// Version returns the version of the [ResponseCode] of this type.
+func (t ResponseCodeType) Version() ResponseCodeVersion {
+	return ResponseCodeVersion(t&responseCodeTypeTPM2 != 0)
+}
+
+// Severity returns the severity of the [ResponseCode] of this type.
+func (t ResponseCodeType) Severity() ResponseCodeSeverity {
+	return ResponseCodeSeverity(t&responseCodeTypeWarning == 0)
+}
+
+// Spec returns where the [ResponseCode] of this type is defined.
+func (t ResponseCodeType) Spec() ResponseCodeSpec {
+	return ResponseCodeSpec(t&responseCodeTypeVendor != 0)
+}
+
+// Base returns the base format-one response code without any handle, parameter or session
+// index. This returns format-zero response codes without any changes.
+func (rc ResponseCode) Base() ResponseCode {
+	if rc.F() {
+		// Format-one response codes are returned without their handle, parameter
+		// or session index.
+		return rc &^ (ResponseH | ResponseP | ResponseS | ResponseNMask)
+	}
+
+	// Format-zero response codes are returned untouched.
+	return rc
+}
+
+// Type returns information about the type of this response code.
+func (rc ResponseCode) Type() ResponseCodeType {
+	var out ResponseCodeType
+
+	switch rc.F() {
+	case true:
+		out |= responseCodeTypeFormatOne
+		out |= responseCodeTypeTPM2
+
+		switch {
+		case rc&rcP != 0:
+			// This is associated with a parameter
+			out |= ResponseCodeType(ResponseCodeIndexTypeParameter << 1)
+		case rc&rcNSessionIndicator != 0:
+			// This is associated with a session
+			out |= ResponseCodeType(ResponseCodeIndexTypeSession << 1)
+		default:
+			// This is associated with a handle
+			out |= ResponseCodeType(ResponseCodeIndexTypeHandle << 1)
+		}
+	case false:
+		if rc.V() {
+			out |= responseCodeTypeTPM2
+		}
+		if rc.S() {
+			out |= responseCodeTypeWarning
+		}
+		if rc.T() {
+			out |= responseCodeTypeVendor
+		}
+	}
+
+	return out
+}
+
+// Index returns the one-indexed handle, parameter or session index associated with this format-one
+// response code. This will return 0 if the response code is not associated with a specific handle,
+// parameter or session.
+func (rc ResponseCode) Index() uint8 {
+	switch rc.Type().IndexType() {
+	case ResponseCodeIndexTypeHandle, ResponseCodeIndexTypeSession:
+		// Handles and sessions only use the lower 3 bits of the N field.
+		return rc.N() &^ uint8(rcNSessionIndicator>>rcNShift)
+	case ResponseCodeIndexTypeParameter:
+		return rc.N()
+	default:
+		return 0
+	}
+}
+
+// SetHandleIndex sets the associated one-indexed handle index for this response code. This
+// will panic if the handle index is out of range or the response code is not a format-one
+// response code. A handle index of zero indicates that the handle is unspecified.
+func (rc ResponseCode) SetHandleIndex(h uint8) ResponseCode {
+	rc = rc.Base()
+	if !rc.F() {
+		panic(fmt.Errorf("%w (base response code is not a format-1 response code)", InvalidResponseCodeError(rc)))
+	}
+	index := responseCodeIndexUnchecked(h)
+	rc = rc + ResponseH + index
+	if index > Response7 {
+		panic(fmt.Errorf("%w (invalid handle index overflows bits 8-10)", InvalidResponseCodeError(rc)))
+	}
+	return rc
+}
+
+// SetParameterIndex sets the associated one-indexed parameter index for this response code. This
+// will panic if the parameter index is out of range or the response code is not a format-one
+// response code or the specified parameter index is zero.
+func (rc ResponseCode) SetParameterIndex(p uint8) ResponseCode {
+	rc = rc.Base()
+	if !rc.F() {
+		panic(fmt.Errorf("%w (base response code is not a format-1 response code)", InvalidResponseCodeError(rc)))
+	}
+	index := responseCodeIndexUnchecked(p)
+	rc = rc + ResponseP + index
+	if index > ResponseF {
+		panic(fmt.Errorf("%w (invalid parameter index overflows bits 8-11)", InvalidResponseCodeError(rc)))
+	}
+	return rc
+}
+
+// SetSession sets the associated one-indexed session index for this response code. This
+// will panic if the session index is out of range or the response code is not a format-one
+// response code. A session index of zero indicates that the session is unspecified.
+func (rc ResponseCode) SetSessionIndex(s uint8) ResponseCode {
+	rc = rc.Base()
+	if !rc.F() {
+		panic(fmt.Errorf("%w (base response code is not a format-1 response code)", InvalidResponseCodeError(rc)))
+	}
+	index := responseCodeIndexUnchecked(s)
+	rc = rc + ResponseS + index
+	if index > Response7 {
+		panic(fmt.Errorf("%w (invalid session index overflows bits 8-10)", InvalidResponseCodeError(rc)))
+	}
+	return rc
+}
+
+// E is a low-level function that returns the E field of the response code, corresponding to
+// the error number. This is the lower 7-bits for format-zero response codes or the lower
+// 6-bits for format-one response codes.
 func (rc ResponseCode) E() uint8 {
 	if rc.F() {
-		return uint8(rc & responseCodeE1)
+		return uint8(rc & rcE1)
 	}
-	return uint8(rc & responseCodeE0)
+	return uint8(rc & rcE0)
 }
 
-// F returns the F field of the response code, corresponding to the format.
-// If it is set, this is a format-one response code. If it is not set, this
-// is a format-zero response code.
+// F is a low-level function that returns the F field of the response code, corresponding to
+// the format. If it is set, this is a format-one response code. If it is clear, this is a
+// format-zero response code.
 func (rc ResponseCode) F() bool {
-	return rc&responseCodeF != 0
+	return rc&rcF != 0
 }
 
-// V returns the V field of the response code, corresponding to the version
-// and is only relevant for format-zero response codes. If this is set
-// then it is a TPM2 code returned when the response tag is
-// TPM_ST_NO_SESSIONS. If it is not set then it is a TPM1.2 code returned
-// when the response tag is TPM_TAG_RSP_COMMAND.
+// V is a low-level function that returns the V field of the response code, corresponding to
+// the version and is only relevant for format-zero response codes. If this is set then it is
+// a TPM2 code returned when the response tag is TPM_ST_NO_SESSIONS. If it is clear then it
+// is a TPM1.2 code returned when the response tag is TPM_TAG_RSP_COMMAND.
 //
 // This will panic if the F field is set.
 func (rc ResponseCode) V() bool {
 	if rc.F() {
 		panic("not a format-0 response code")
 	}
-	return rc&responseCodeV != 0
+	return rc&rcV != 0
 }
 
-// T returns the T field of the response code, corresponding to the
-// TCG/Vendor indicator and is only relevant for format-zero response
-// codes. If this is set then the code is defined by the TPM vendor. If
-// it is not set then the code is defined by the TCG.
+// T is a low-level function that returns the T field of the response code, corresponding to the
+// TCG/Vendor indicator and is only relevant for format-zero response codes. If this is set then
+// the code is defined by the TPM vendor. If it is clear then the code is defined by the TCG.
 //
 // This will panic if the F field is set.
 func (rc ResponseCode) T() bool {
 	if rc.F() {
 		panic("not a format-0 response code")
 	}
-	return rc&responseCodeT != 0
+	return rc&rcT != 0
 }
 
-// S returns the S field of the response code, corresponding to the
-// severity and is only relevant for format-zero response codes. If this
-// is set then the code indicates a warning. If it is not set then the
-// code indicates an error.
+// S is a low-level function that returns the S field of the response code, corresponding to the
+// severity and is only relevant for format-zero response codes. If this is set then the code
+// indicates a warning. If it is clear then the code indicates an error.
 //
 // This will panic if the F field is set.
 func (rc ResponseCode) S() bool {
 	if rc.F() {
 		panic("not a format-0 response code")
 	}
-	return rc&responseCodeS != 0
+	return rc&rcS != 0
 }
 
-// P returns the P field of the response code and is only relevant for
-// format-one response codes. If this is set then the code is associated with
-// a command parameter. If it is not set then the code is associated with a
-// command handle or session.
+// P is a low-level function that returns the P field of the response code and is only relevant for
+// format-one response codes. If this is set then the code is associated with a command parameter.
+// If it is not set then the code is associated with a command handle or session.
 //
 // This will panic if the F field is not set.
 func (rc ResponseCode) P() bool {
 	if !rc.F() {
 		panic("not a format-1 response code")
 	}
-	return rc&responseCodeP != 0
+	return rc&rcP != 0
 }
 
-// N returns the N field of the response code and is only relevant for
-// format-one response codes. If the P field is set then this indicates the
-// parameter number from 0x1 to 0xf. If the P field is not set then the
-// lower 3 bits indicate the handle or session number (0x1 to 0x7 for handles
-// and 0x9 to 0xf for sessions).
+// N is a low-level function that returns the N field of the response code and is only relevant for
+// format-one response codes. If the P field is set then this indicates the parameter number from
+// 0x1 to 0xf. If the P field is not set then the lower 3 bits indicate the handle or session number
+// (0x1 to 0x7 for handles and 0x9 to 0xf for sessions).
 //
 // This will panic if the F field is not set.
 func (rc ResponseCode) N() uint8 {
 	if !rc.F() {
 		panic("not a format-1 response code")
 	}
-	return uint8(rc & responseCodeN >> responseCodeIndexShift)
+	return uint8((rc & rcN) >> rcNShift)
 }
-
-const (
-	// Note that we only define a very limited set of response codes
-	// (TPM_RC) where we use them directly. In most cases, the
-	// ResponseCode (TPM_RC) type is converted into a go error type
-	// by the DecodeResponseCode function.
-
-	ResponseSuccess   ResponseCode = 0     // TPM_RC_SUCCESS
-	ResponseBadTag    ResponseCode = 0x1e  // TPM_RC_BAD_TAG
-	ResponseFailure   ResponseCode = 0x101 // TPM_RC_FAILURE
-	ResponseNeedsTest ResponseCode = 0x153 // TPM_RC_NEEDS_TEST
-	ResponseTesting   ResponseCode = 0x90a // TPM_RC_TESTING
-)
 
 // ArithmeticOp corresponds to the TPM_EO type.
 type ArithmeticOp uint16

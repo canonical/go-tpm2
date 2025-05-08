@@ -295,223 +295,307 @@ func (c CommandCode) Format(s fmt.State, f rune) {
 	}
 }
 
-func (e ErrorCode) String() string {
-	switch e {
-	case ErrorInitialize:
+// String implements [fmt.Stringer].
+func (rc ResponseCode) String() string {
+	var str string
+
+	switch rc.Base() {
+	case ResponseSuccess:
+		return "TPM_RC_SUCCESS"
+	case ResponseBadTag:
+		return "TPM_RC_BAD_TAG"
+	// TCG defined TPM2 format-zero error codes start here
+	case ResponseInitialize:
 		return "TPM_RC_INITIALIZE"
-	case ErrorFailure:
+	case ResponseFailure:
 		return "TPM_RC_FAILURE"
-	case ErrorSequence:
+	case ResponseSequence:
 		return "TPM_RC_SEQUENCE"
-	case ErrorDisabled:
+	case ResponseDisabled:
 		return "TPM_RC_DISABLED"
-	case ErrorExclusive:
+	case ResponseExclusive:
 		return "TPM_RC_EXCLUSIVE"
-	case ErrorAuthType:
+	case ResponseAuthType:
 		return "TPM_RC_AUTH_TYPE"
-	case ErrorAuthMissing:
+	case ResponseAuthMissing:
 		return "TPM_RC_AUTH_MISSING"
-	case ErrorPolicy:
+	case ResponsePolicy:
 		return "TPM_RC_POLICY"
-	case ErrorPCR:
+	case ResponsePCR:
 		return "TPM_RC_PCR"
-	case ErrorPCRChanged:
+	case ResponsePCRChanged:
 		return "TPM_RC_PCR_CHANGED"
-	case ErrorUpgrade:
+	case ResponseUpgrade:
 		return "TPM_RC_UPGRADE"
-	case ErrorTooManyContexts:
+	case ResponseTooManyContexts:
 		return "TPM_RC_TOO_MANY_CONTEXTS"
-	case ErrorAuthUnavailable:
+	case ResponseAuthUnavailable:
 		return "TPM_RC_AUTH_UNAVAILABLE"
-	case ErrorReboot:
+	case ResponseReboot:
 		return "TPM_RC_REBOOT"
-	case ErrorUnbalanced:
+	case ResponseUnbalanced:
 		return "TPM_RC_UNBALANCED"
-	case ErrorCommandSize:
+	case ResponseCommandSize:
 		return "TPM_RC_COMMAND_SIZE"
-	case ErrorCommandCode:
+	case ResponseCommandCode:
 		return "TPM_RC_COMMAND_CODE"
-	case ErrorAuthsize:
+	case ResponseAuthsize:
 		return "TPM_RC_AUTHSIZE"
-	case ErrorAuthContext:
+	case ResponseAuthContext:
 		return "TPM_RC_AUTH_CONTEXT"
-	case ErrorNVRange:
+	case ResponseNVRange:
 		return "TPM_RC_NV_RANGE"
-	case ErrorNVSize:
+	case ResponseNVSize:
 		return "TPM_RC_NV_SIZE"
-	case ErrorNVLocked:
+	case ResponseNVLocked:
 		return "TPM_RC_NV_LOCKED"
-	case ErrorNVAuthorization:
+	case ResponseNVAuthorization:
 		return "TPM_RC_NV_AUTHORIZATION"
-	case ErrorNVUninitialized:
+	case ResponseNVUninitialized:
 		return "TPM_RC_NV_UNINITIALIZED"
-	case ErrorNVSpace:
+	case ResponseNVSpace:
 		return "TPM_RC_NV_SPACE"
-	case ErrorNVDefined:
+	case ResponseNVDefined:
 		return "TPM_RC_NV_DEFINED"
-	case ErrorBadContext:
+	case ResponseBadContext:
 		return "TPM_RC_BAD_CONTEXT"
-	case ErrorCpHash:
+	case ResponseCpHash:
 		return "TPM_RC_CPHASH"
-	case ErrorParent:
+	case ResponseParent:
 		return "TPM_RC_PARENT"
-	case ErrorNeedsTest:
+	case ResponseNeedsTest:
 		return "TPM_RC_NEEDS_TEST"
-	case ErrorNoResult:
+	case ResponseNoResult:
 		return "TPM_RC_NO_RESULT"
-	case ErrorSensitive:
+	case ResponseSensitive:
 		return "TPM_RC_SENSITIVE"
 	// Format 1 error codes start here
-	case ErrorAsymmetric:
-		return "TPM_RC_ASYMMETRIC"
-	case ErrorAttributes:
-		return "TPM_RC_ATTRIBUTES"
-	case ErrorHash:
-		return "TPM_RC_HASH"
-	case ErrorValue:
-		return "TPM_RC_VALUE"
-	case ErrorHierarchy:
-		return "TPM_RC_HIERARCHY"
-	case ErrorKeySize:
-		return "TPM_RC_KEY_SIZE"
-	case ErrorMGF:
-		return "TPM_RC_MGF"
-	case ErrorMode:
-		return "TPM_RC_MODE"
-	case ErrorType:
-		return "TPM_RC_TYPE"
-	case ErrorHandle:
-		return "TPM_RC_HANDLE"
-	case ErrorKDF:
-		return "TPM_RC_KDF"
-	case ErrorRange:
-		return "TPM_RC_RANGE"
-	case ErrorAuthFail:
-		return "TPM_RC_AUTH_FAIL"
-	case ErrorNonce:
-		return "TPM_RC"
-	case ErrorPP:
-		return "TPM_RC_PP"
-	case ErrorScheme:
-		return "TPM_RC_SCHEME"
-	case ErrorSize:
-		return "TPM_RC_SIZE"
-	case ErrorSymmetric:
-		return "TPM_RC_SYMMETRIC"
-	case ErrorTag:
-		return "TPM_RC_TAG"
-	case ErrorSelector:
-		return "TPM_RC_SELECTOR"
-	case ErrorInsufficient:
-		return "TPM_RC_INSUFFICIENT"
-	case ErrorSignature:
-		return "TPM_RC_SIGNATURE"
-	case ErrorKey:
-		return "TPM_RC_KEY"
-	case ErrorPolicyFail:
-		return "TPM_RC_POLICY_FAIL"
-	case ErrorIntegrity:
-		return "TPM_RC_INTEGRITY"
-	case ErrorTicket:
-		return "TPM_RC_TICKET"
-	case ErrorReservedBits:
-		return "TPM_RC_RESERVED_BITS"
-	case ErrorBadAuth:
-		return "TPM_RC_BAD_AUTH"
-	case ErrorExpired:
-		return "TPM_RC_EXPIRED"
-	case ErrorPolicyCC:
-		return "TPM_RC_POLICY_CC"
-	case ErrorBinding:
-		return "TPM_RC_BINDING"
-	case ErrorCurve:
-		return "TPM_RC_CURVE"
-	case ErrorECCPoint:
-		return "TPM_RC_ECC_POINT"
-	default:
-		return fmt.Sprintf("0x%02x", uint8(e))
-	}
-}
-
-func (e ErrorCode) Format(s fmt.State, f rune) {
-	switch f {
-	case 's', 'v':
-		fmt.Fprintf(s, "%s", e.String())
-	default:
-		fmt.Fprintf(s, makeDefaultFormatter(s, f), uint8(e))
-	}
-}
-
-func (e WarningCode) String() string {
-	switch e {
-	case WarningContextGap:
+	case ResponseAsymmetric:
+		str = "TPM_RC_ASYMMETRIC"
+	case ResponseAttributes:
+		str = "TPM_RC_ATTRIBUTES"
+	case ResponseHash:
+		str = "TPM_RC_HASH"
+	case ResponseValue:
+		str = "TPM_RC_VALUE"
+	case ResponseHierarchy:
+		str = "TPM_RC_HIERARCHY"
+	case ResponseKeySize:
+		str = "TPM_RC_KEY_SIZE"
+	case ResponseMGF:
+		str = "TPM_RC_MGF"
+	case ResponseMode:
+		str = "TPM_RC_MODE"
+	case ResponseType:
+		str = "TPM_RC_TYPE"
+	case ResponseHandle:
+		str = "TPM_RC_HANDLE"
+	case ResponseKDF:
+		str = "TPM_RC_KDF"
+	case ResponseRange:
+		str = "TPM_RC_RANGE"
+	case ResponseAuthFail:
+		str = "TPM_RC_AUTH_FAIL"
+	case ResponseNonce:
+		str = "TPM_RC_NONCE"
+	case ResponsePP:
+		str = "TPM_RC_PP"
+	case ResponseScheme:
+		str = "TPM_RC_SCHEME"
+	case ResponseSize:
+		str = "TPM_RC_SIZE"
+	case ResponseSymmetric:
+		str = "TPM_RC_SYMMETRIC"
+	case ResponseTag:
+		str = "TPM_RC_TAG"
+	case ResponseSelector:
+		str = "TPM_RC_SELECTOR"
+	case ResponseInsufficient:
+		str = "TPM_RC_INSUFFICIENT"
+	case ResponseSignature:
+		str = "TPM_RC_SIGNATURE"
+	case ResponseKey:
+		str = "TPM_RC_KEY"
+	case ResponsePolicyFail:
+		str = "TPM_RC_POLICY_FAIL"
+	case ResponseIntegrity:
+		str = "TPM_RC_INTEGRITY"
+	case ResponseTicket:
+		str = "TPM_RC_TICKET"
+	case ResponseReservedBits:
+		str = "TPM_RC_RESERVED_BITS"
+	case ResponseBadAuth:
+		str = "TPM_RC_BAD_AUTH"
+	case ResponseExpired:
+		str = "TPM_RC_EXPIRED"
+	case ResponsePolicyCC:
+		str = "TPM_RC_POLICY_CC"
+	case ResponseBinding:
+		str = "TPM_RC_BINDING"
+	case ResponseCurve:
+		str = "TPM_RC_CURVE"
+	case ResponseECCPoint:
+		str = "TPM_RC_ECC_POINT"
+	// TCG defined TPM2 format-zero warning codes start here
+	case ResponseContextGap:
 		return "TPM_RC_CONTEXT_GAP"
-	case WarningObjectMemory:
+	case ResponseObjectMemory:
 		return "TPM_RC_OBJECT_MEMORY"
-	case WarningSessionMemory:
+	case ResponseSessionMemory:
 		return "TPM_RC_SESSION_MEMORY"
-	case WarningMemory:
+	case ResponseMemory:
 		return "TPM_RC_MEMORY"
-	case WarningSessionHandles:
+	case ResponseSessionHandles:
 		return "TPM_RC_SESSION_HANDLES"
-	case WarningObjectHandles:
+	case ResponseObjectHandles:
 		return "TPM_RC_OBJECT_HANDLES"
-	case WarningLocality:
+	case ResponseLocality:
 		return "TPM_RC_LOCALITY"
-	case WarningYielded:
+	case ResponseYielded:
 		return "TPM_RC_YIELDED"
-	case WarningCanceled:
+	case ResponseCanceled:
 		return "TPM_RC_CANCELED"
-	case WarningTesting:
+	case ResponseTesting:
 		return "TPM_RC_TESTING"
-	case WarningReferenceH0:
+	case ResponseReferenceH0:
 		return "TPM_RC_REFERENCE_H0"
-	case WarningReferenceH1:
+	case ResponseReferenceH1:
 		return "TPM_RC_REFERENCE_H1"
-	case WarningReferenceH2:
+	case ResponseReferenceH2:
 		return "TPM_RC_REFERENCE_H2"
-	case WarningReferenceH3:
+	case ResponseReferenceH3:
 		return "TPM_RC_REFERENCE_H3"
-	case WarningReferenceH4:
+	case ResponseReferenceH4:
 		return "TPM_RC_REFERENCE_H4"
-	case WarningReferenceH5:
+	case ResponseReferenceH5:
 		return "TPM_RC_REFERENCE_H5"
-	case WarningReferenceH6:
+	case ResponseReferenceH6:
 		return "TPM_RC_REFERENCE_H6"
-	case WarningReferenceS0:
+	case ResponseReferenceS0:
 		return "TPM_RC_REFERENCE_S0"
-	case WarningReferenceS1:
+	case ResponseReferenceS1:
 		return "TPM_RC_REFERENCE_S1"
-	case WarningReferenceS2:
+	case ResponseReferenceS2:
 		return "TPM_RC_REFERENCE_S2"
-	case WarningReferenceS3:
+	case ResponseReferenceS3:
 		return "TPM_RC_REFERENCE_S3"
-	case WarningReferenceS4:
+	case ResponseReferenceS4:
 		return "TPM_RC_REFERENCE_S4"
-	case WarningReferenceS5:
+	case ResponseReferenceS5:
 		return "TPM_RC_REFERENCE_S5"
-	case WarningReferenceS6:
+	case ResponseReferenceS6:
 		return "TPM_RC_REFERENCE_S6"
-	case WarningNVRate:
+	case ResponseNVRate:
 		return "TPM_RC_NV_RATE"
-	case WarningLockout:
+	case ResponseLockout:
 		return "TPM_RC_LOCKOUT"
-	case WarningRetry:
+	case ResponseRetry:
 		return "TPM_RC_RETRY"
-	case WarningNVUnavailable:
+	case ResponseNVUnavailable:
 		return "TPM_RC_NV_UNAVAILABLE"
 	default:
-		return fmt.Sprintf("0x%02x", uint8(e))
+		str = fmt.Sprintf("%#08x", uint32(rc))
+		if !rc.F() {
+			return str
+		}
+	}
+
+	// For format-one response codes, add the parameter, session or handle indicator.
+	switch {
+	case rc.P():
+		str += " + TPM_RC_P"
+	case rc.N()&uint8(rcNSessionIndicator>>rcNShift) != 0:
+		str += " + TPM_RC_S"
+	default:
+		str += " + TPM_RC_H"
+	}
+
+	// For format-one response codes, add the parameter, session or handle index.
+	var n uint8
+	switch {
+	case rc.N() == 0:
+		// No associated parameter, session, or handle index.
+		return str
+	case rc.P():
+		// There is an associated parameter index - use the full 4 bits of N.
+		n = rc.N()
+	default:
+		// There is an associated session or handle index, depending on the
+		// MSB of N. Use the lower 3 bits of N.
+		n = rc.N() &^ uint8(rcNSessionIndicator>>rcNShift)
+	}
+
+	switch {
+	case n <= 0xf:
+		return fmt.Sprintf("%s + TPM_RC_%X", str, n)
+	default:
+		return fmt.Sprintf("%s + %#02x", str, n)
 	}
 }
 
-func (e WarningCode) Format(s fmt.State, f rune) {
+// Format implements [fmt.Formatter]. The '+' flag for the 's' or 'v' verb will
+// append a description of the response code if one exists.
+func (rc ResponseCode) Format(s fmt.State, f rune) {
 	switch f {
 	case 's', 'v':
-		fmt.Fprintf(s, "%s", e.String())
+		fmt.Fprintf(s, "%s", rc.String())
+		if s.Flag('+') {
+			desc, hasDesc := rcDescriptions[rc.Base()]
+			if hasDesc {
+				fmt.Fprintf(s, " (%s)", desc)
+			}
+		}
 	default:
-		fmt.Fprintf(s, makeDefaultFormatter(s, f), uint8(e))
+		fmt.Fprintf(s, makeDefaultFormatter(s, f), uint32(rc))
 	}
+}
+
+type responseCoder interface {
+	ResponseCode() ResponseCode
+}
+
+type responseCodeFormatterImpl[RC responseCoder] struct {
+	rc RC
+}
+
+func (formatter responseCodeFormatterImpl[RC]) String() string {
+	return formatter.rc.ResponseCode().String()
+}
+
+func (formatter responseCodeFormatterImpl[RC]) Format(s fmt.State, f rune) {
+	formatter.rc.ResponseCode().Format(s, f)
+}
+
+func responseCodeFormatter[RC responseCoder](rc RC) responseCodeFormatterImpl[RC] {
+	return responseCodeFormatterImpl[RC]{rc: rc}
+}
+
+// String implements [fmt.Stringer].
+func (e ErrorCode) String() string {
+	// An invalid error code may generate a panic, but this is caught
+	// by the fmt package.
+	return responseCodeFormatter(e).String()
+}
+
+// Format implements [fmt.Formatter].
+func (e ErrorCode) Format(s fmt.State, f rune) {
+	// An invalid error code may generate a panic, but this is caught
+	// by the fmt package.
+	responseCodeFormatter(e).Format(s, f)
+}
+
+// String implements [fmt.Stringer].
+func (e WarningCode) String() string {
+	// An invalid warning code may generate a panic, but this is caught
+	// by the fmt package.
+	return responseCodeFormatter(e).String()
+}
+
+// Format implements [fmt.Formatter].
+func (e WarningCode) Format(s fmt.State, f rune) {
+	// An invalid warning code may generate a panic, but this is caught
+	// by the fmt package.
+	responseCodeFormatter(e).Format(s, f)
 }
 
 func (h Handle) String() string {
@@ -817,109 +901,109 @@ func (o ArithmeticOp) Format(s fmt.State, f rune) {
 }
 
 var (
-	errorCodeDescriptions = map[ErrorCode]string{
-		ErrorInitialize:      "TPM not initialized by TPM2_Startup or already initialized",
-		ErrorFailure:         "commands not being accepted because of a TPM failure",
-		ErrorSequence:        "improper use of a sequence handle",
-		ErrorDisabled:        "the command is disabled",
-		ErrorExclusive:       "command failed because audit sequence required exclusivity",
-		ErrorAuthType:        "authorization handle is not correct for command",
-		ErrorAuthMissing:     "command requires an authorization session for handle and it is not present",
-		ErrorPolicy:          "policy failure in math operation or an invalid authPolicy value",
-		ErrorPCR:             "PCR check fail",
-		ErrorPCRChanged:      "PCR have changed since checked",
-		ErrorTooManyContexts: "context ID counter is at maximum",
-		ErrorAuthUnavailable: "authValue or authPolicy is not available for selected entity",
-		ErrorReboot:          "a _TPM_Init and Startup(CLEAR) is required before the TPM can resume operation",
-		ErrorUnbalanced: "the protection algorithms (hash and symmetric) are not reasonably balanced. The digest size of the hash must be " +
+	rcDescriptions = map[ResponseCode]string{
+		ResponseBadTag:          "defined for compatibility with TPM 1.2",
+		ResponseInitialize:      "TPM not initialized by TPM2_Startup or already initialized",
+		ResponseFailure:         "commands not being accepted because of a TPM failure",
+		ResponseSequence:        "improper use of a sequence handle",
+		ResponseDisabled:        "the command is disabled",
+		ResponseExclusive:       "command failed because audit sequence required exclusivity",
+		ResponseAuthType:        "authorization handle is not correct for command",
+		ResponseAuthMissing:     "command requires an authorization session for handle and it is not present",
+		ResponsePolicy:          "policy failure in math operation or an invalid authPolicy value",
+		ResponsePCR:             "PCR check fail",
+		ResponsePCRChanged:      "PCR have changed since checked",
+		ResponseTooManyContexts: "context ID counter is at maximum",
+		ResponseAuthUnavailable: "authValue or authPolicy is not available for selected entity",
+		ResponseReboot:          "a _TPM_Init and Startup(CLEAR) is required before the TPM can resume operation",
+		ResponseUnbalanced: "the protection algorithms (hash and symmetric) are not reasonably balanced. The digest size of the hash must be " +
 			"larger than the key size of the symmetric algorithm",
-		ErrorCommandSize: "command commandSize value is inconsistent with contents of the command buffer; either the size is not the same " +
+		ResponseCommandSize: "command commandSize value is inconsistent with contents of the command buffer; either the size is not the same " +
 			"as the octets loaded by the hardware interface layer or the value is not large enough to hold a command header",
-		ErrorCommandCode: "command code not supported",
-		ErrorAuthsize: "the value of authorizationSize is out of range or the number of octets in the Authorization Area is greater than " +
+		ResponseCommandCode: "command code not supported",
+		ResponseAuthsize: "the value of authorizationSize is out of range or the number of octets in the Authorization Area is greater than " +
 			"required",
-		ErrorAuthContext: "use of an authorization session with a context command or another command that cannot have an authorization " +
+		ResponseAuthContext: "use of an authorization session with a context command or another command that cannot have an authorization " +
 			"session",
-		ErrorNVRange:         "NV offset+size is out of range",
-		ErrorNVSize:          "Requested allocation size is larger than allowed",
-		ErrorNVLocked:        "NV access locked",
-		ErrorNVAuthorization: "NV access authorization fails in command actions (this failure does not affect lockout.action)",
-		ErrorNVUninitialized: "an NV Index is used before being initialized or the state saved by TPM2_Shutdown(STATE) could not be " +
+		ResponseNVRange:         "NV offset+size is out of range",
+		ResponseNVSize:          "Requested allocation size is larger than allowed",
+		ResponseNVLocked:        "NV access locked",
+		ResponseNVAuthorization: "NV access authorization fails in command actions (this failure does not affect lockout.action)",
+		ResponseNVUninitialized: "an NV Index is used before being initialized or the state saved by TPM2_Shutdown(STATE) could not be " +
 			"restored",
-		ErrorNVSpace:    "insufficient space for NV allocation",
-		ErrorNVDefined:  "NV Index or persistent object already defined",
-		ErrorBadContext: "context in TPM2_ContextLoad() is not valid",
-		ErrorCpHash:     "cpHash value already set or not correct for use",
-		ErrorParent:     "handle for parent is not a valid parent",
-		ErrorNeedsTest:  "some function needs testing",
-		ErrorNoResult: "returned when an internal function cannot process a request due to an unspecified problem. This code is usually " +
+		ResponseNVSpace:    "insufficient space for NV allocation",
+		ResponseNVDefined:  "NV Index or persistent object already defined",
+		ResponseBadContext: "context in TPM2_ContextLoad() is not valid",
+		ResponseCpHash:     "cpHash value already set or not correct for use",
+		ResponseParent:     "handle for parent is not a valid parent",
+		ResponseNeedsTest:  "some function needs testing",
+		ResponseNoResult: "returned when an internal function cannot process a request due to an unspecified problem. This code is usually " +
 			"related to invalid parameters that are not properly filtered by the input unmarshaling code",
-		ErrorSensitive:    "the sensitive area did not unmarshal correctly after decryption",
-		ErrorAsymmetric:   "asymmetric algorithm not supported or not correct",
-		ErrorAttributes:   "inconsistent attributes",
-		ErrorHash:         "hash algorithm not supported or not appropriate",
-		ErrorValue:        "value is out of range or is not correct for the context",
-		ErrorHierarchy:    "hierarchy is not enabled or is not correct for the use",
-		ErrorKeySize:      "key size is not supported",
-		ErrorMGF:          "mask generation function not supported",
-		ErrorMode:         "mode of operation not supported",
-		ErrorType:         "the type of the value is not appropriate for the use",
-		ErrorHandle:       "the handle is not correct for the use",
-		ErrorKDF:          "unsupported key derivation function or function not appropriate for use",
-		ErrorRange:        "value was out of allowed range",
-		ErrorAuthFail:     "the authorization HMAC check failed and DA counter incremented",
-		ErrorNonce:        "invalid nonce size or nonce value mismatch",
-		ErrorPP:           "authorization requires assertion of PP",
-		ErrorScheme:       "unsupported or incompatible scheme",
-		ErrorSize:         "structure is the wrong size",
-		ErrorSymmetric:    "unsupported symmetric algorithm or key size, or not appropriate for instance",
-		ErrorTag:          "incorrect structure tag",
-		ErrorSelector:     "union selector is incorrect",
-		ErrorInsufficient: "the TPM was unable to unmarshal a value because there were not enough octets in the input buffer",
-		ErrorSignature:    "the signature is not valid",
-		ErrorKey:          "key fields are not compatible with the selected use",
-		ErrorPolicyFail:   "a policy check failed",
-		ErrorIntegrity:    "integrity check failed",
-		ErrorTicket:       "invalid ticket",
-		ErrorReservedBits: "reserved bits not set to zero as required",
-		ErrorBadAuth:      "authorization failure without DA implications",
-		ErrorExpired:      "the policy has expired",
-		ErrorPolicyCC: "the commandCode in the policy is not the commandCode of the command or the command code in a policy command " +
+		ResponseSensitive:    "the sensitive area did not unmarshal correctly after decryption",
+		ResponseAsymmetric:   "asymmetric algorithm not supported or not correct",
+		ResponseAttributes:   "inconsistent attributes",
+		ResponseHash:         "hash algorithm not supported or not appropriate",
+		ResponseValue:        "value is out of range or is not correct for the context",
+		ResponseHierarchy:    "hierarchy is not enabled or is not correct for the use",
+		ResponseKeySize:      "key size is not supported",
+		ResponseMGF:          "mask generation function not supported",
+		ResponseMode:         "mode of operation not supported",
+		ResponseType:         "the type of the value is not appropriate for the use",
+		ResponseHandle:       "the handle is not correct for the use",
+		ResponseKDF:          "unsupported key derivation function or function not appropriate for use",
+		ResponseRange:        "value was out of allowed range",
+		ResponseAuthFail:     "the authorization HMAC check failed and DA counter incremented",
+		ResponseNonce:        "invalid nonce size or nonce value mismatch",
+		ResponsePP:           "authorization requires assertion of PP",
+		ResponseScheme:       "unsupported or incompatible scheme",
+		ResponseSize:         "structure is the wrong size",
+		ResponseSymmetric:    "unsupported symmetric algorithm or key size, or not appropriate for instance",
+		ResponseTag:          "incorrect structure tag",
+		ResponseSelector:     "union selector is incorrect",
+		ResponseInsufficient: "the TPM was unable to unmarshal a value because there were not enough octets in the input buffer",
+		ResponseSignature:    "the signature is not valid",
+		ResponseKey:          "key fields are not compatible with the selected use",
+		ResponsePolicyFail:   "a policy check failed",
+		ResponseIntegrity:    "integrity check failed",
+		ResponseTicket:       "invalid ticket",
+		ResponseReservedBits: "reserved bits not set to zero as required",
+		ResponseBadAuth:      "authorization failure without DA implications",
+		ResponseExpired:      "the policy has expired",
+		ResponsePolicyCC: "the commandCode in the policy is not the commandCode of the command or the command code in a policy command " +
 			"references a command that is not implemented",
-		ErrorBinding:    "public and sensitive portions of an object are not cryptographically bound",
-		ErrorCurve:      "curve not supported",
-		ErrorECCPoint:   "point is not on the required curve",
-		ErrorFWLimited:  "the hierarchy is firmware-limited but the Firmware Secret is unavailable",
-		ErrorSVNLimited: "the hierarchy is SVN-limited but the Firmware SVN Secret associated with the given SVN is unavailable"}
-
-	warningCodeDescriptions = map[WarningCode]string{
-		WarningContextGap:     "gap for context ID is too large",
-		WarningObjectMemory:   "out of memory for object contexts",
-		WarningSessionMemory:  "out of memory for session contexts",
-		WarningMemory:         "out of shared object/session memory or need space for internal operations",
-		WarningSessionHandles: "out of session handles – a session must be flushed before a new session may be created",
-		WarningObjectHandles:  "out of object handles – the handle space for objects is depleted and a reboot is required",
-		WarningLocality:       "bad locality",
-		WarningYielded:        "the TPM has suspended operation on the command; forward progress was made and the command may be retried",
-		WarningCanceled:       "the command was canceled",
-		WarningTesting:        "TPM is performing self-tests",
-		WarningReferenceH0:    "the 1st handle in the handle area references a transient object or session that is not loaded",
-		WarningReferenceH1:    "the 2nd handle in the handle area references a transient object or session that is not loaded",
-		WarningReferenceH2:    "the 3rd handle in the handle area references a transient object or session that is not loaded",
-		WarningReferenceH3:    "the 4th handle in the handle area references a transient object or session that is not loaded",
-		WarningReferenceH4:    "the 5th handle in the handle area references a transient object or session that is not loaded",
-		WarningReferenceH5:    "the 6th handle in the handle area references a transient object or session that is not loaded",
-		WarningReferenceH6:    "the 7th handle in the handle area references a transient object or session that is not loaded",
-		WarningReferenceS0:    "the 1st authorization session handle references a session that is not loaded",
-		WarningReferenceS1:    "the 2nd authorization session handle references a session that is not loaded",
-		WarningReferenceS2:    "the 3rd authorization session handle references a session that is not loaded",
-		WarningReferenceS3:    "the 4th authorization session handle references a session that is not loaded",
-		WarningReferenceS4:    "the 5th authorization session handle references a session that is not loaded",
-		WarningReferenceS5:    "the 6th authorization session handle references a session that is not loaded",
-		WarningReferenceS6:    "the 7th authorization session handle references a session that is not loaded",
-		WarningNVRate:         "the TPM is rate-limiting accesses to prevent wearout of NV",
-		WarningLockout: "authorizations for objects subject to DA protection are not allowed at this time because the TPM is in DA " +
+		ResponseBinding:        "public and sensitive portions of an object are not cryptographically bound",
+		ResponseCurve:          "curve not supported",
+		ResponseECCPoint:       "point is not on the required curve",
+		ResponseFWLimited:      "the hierarchy is firmware-limited but the Firmware Secret is unavailable",
+		ResponseSVNLimited:     "the hierarchy is SVN-limited but the Firmware SVN Secret associated with the given SVN is unavailable",
+		ResponseContextGap:     "gap for context ID is too large",
+		ResponseObjectMemory:   "out of memory for object contexts",
+		ResponseSessionMemory:  "out of memory for session contexts",
+		ResponseMemory:         "out of shared object/session memory or need space for internal operations",
+		ResponseSessionHandles: "out of session handles – a session must be flushed before a new session may be created",
+		ResponseObjectHandles:  "out of object handles – the handle space for objects is depleted and a reboot is required",
+		ResponseLocality:       "bad locality",
+		ResponseYielded:        "the TPM has suspended operation on the command; forward progress was made and the command may be retried",
+		ResponseCanceled:       "the command was canceled",
+		ResponseTesting:        "TPM is performing self-tests",
+		ResponseReferenceH0:    "the 1st handle in the handle area references a transient object or session that is not loaded",
+		ResponseReferenceH1:    "the 2nd handle in the handle area references a transient object or session that is not loaded",
+		ResponseReferenceH2:    "the 3rd handle in the handle area references a transient object or session that is not loaded",
+		ResponseReferenceH3:    "the 4th handle in the handle area references a transient object or session that is not loaded",
+		ResponseReferenceH4:    "the 5th handle in the handle area references a transient object or session that is not loaded",
+		ResponseReferenceH5:    "the 6th handle in the handle area references a transient object or session that is not loaded",
+		ResponseReferenceH6:    "the 7th handle in the handle area references a transient object or session that is not loaded",
+		ResponseReferenceS0:    "the 1st authorization session handle references a session that is not loaded",
+		ResponseReferenceS1:    "the 2nd authorization session handle references a session that is not loaded",
+		ResponseReferenceS2:    "the 3rd authorization session handle references a session that is not loaded",
+		ResponseReferenceS3:    "the 4th authorization session handle references a session that is not loaded",
+		ResponseReferenceS4:    "the 5th authorization session handle references a session that is not loaded",
+		ResponseReferenceS5:    "the 6th authorization session handle references a session that is not loaded",
+		ResponseReferenceS6:    "the 7th authorization session handle references a session that is not loaded",
+		ResponseNVRate:         "the TPM is rate-limiting accesses to prevent wearout of NV",
+		ResponseLockout: "authorizations for objects subject to DA protection are not allowed at this time because the TPM is in DA " +
 			"lockout mode",
-		WarningRetry:         "the TPM was not able to start the command",
-		WarningNVUnavailable: "the command may require writing of NV and NV is not current accessible"}
+		ResponseRetry:         "the TPM was not able to start the command",
+		ResponseNVUnavailable: "the command may require writing of NV and NV is not current accessible",
+	}
 )

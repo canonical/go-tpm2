@@ -1203,7 +1203,7 @@ func (s *policySuite) TestPolicyNVWithSubPolicyError(c *C) {
 		`cannot authorize resource with name 0x([[:xdigit:]]{68}): `+
 		`cannot run 'TPM2_PolicySecret assertion' task in root branch: `+
 		`cannot complete authorization with authName=0x40000001, policyRef=: `+
-		`TPM returned an error for session 1 whilst executing command TPM_CC_PolicySecret: TPM_RC_BAD_AUTH \(authorization failure without DA implications\)`)
+		`TPM returned an error for session 1 whilst executing command TPM_CC_PolicySecret: TPM_RC_BAD_AUTH \+ TPM_RC_S \+ TPM_RC_1 \(authorization failure without DA implications\)`)
 
 	var pe *PolicyError
 	c.Assert(err, internal_testutil.ErrorAs, &pe)
@@ -1461,7 +1461,7 @@ func (s *policySuite) TestPolicySecretFail(c *C) {
 		authObject: s.TPM.OwnerHandleContext(),
 		policyRef:  []byte("foo")})
 	c.Check(err, ErrorMatches, `cannot run 'TPM2_PolicySecret assertion' task in root branch: cannot complete authorization with authName=0x40000001, policyRef=0x666f6f: `+
-		`TPM returned an error for session 1 whilst executing command TPM_CC_PolicySecret: TPM_RC_BAD_AUTH \(authorization failure without DA implications\)`)
+		`TPM returned an error for session 1 whilst executing command TPM_CC_PolicySecret: TPM_RC_BAD_AUTH \+ TPM_RC_S \+ TPM_RC_1 \(authorization failure without DA implications\)`)
 	var pe *PolicyError
 	c.Assert(err, internal_testutil.ErrorAs, &pe)
 	c.Check(pe.Path, Equals, "")
@@ -1848,7 +1848,7 @@ func (s *policySuite) TestPolicySignedWithInvalidSignature(c *C) {
 		signerOpts: tpm2.HashAlgorithmSHA256})
 	c.Check(err, ErrorMatches, `cannot run 'TPM2_PolicySigned assertion' task in root branch: `+
 		`cannot complete authorization with authName=0x([[:xdigit:]]{68}), policyRef=0x666f6f: `+
-		`TPM returned an error for parameter 5 whilst executing command TPM_CC_PolicySigned: TPM_RC_SIGNATURE \(the signature is not valid\)`)
+		`TPM returned an error for parameter 5 whilst executing command TPM_CC_PolicySigned: TPM_RC_SIGNATURE \+ TPM_RC_P \+ TPM_RC_5 \(the signature is not valid\)`)
 	var pe *PolicyError
 	c.Assert(err, internal_testutil.ErrorAs, &pe)
 	c.Check(pe.Path, Equals, "")
@@ -3533,7 +3533,7 @@ func (s *policySuite) TestPolicyPCRValuesFails(c *C) {
 		tpm2.HashAlgorithmSHA256: {
 			0: internal_testutil.DecodeHexString(c, "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")}}
 	err := s.testPolicyPCRValues(c, values)
-	c.Check(err, ErrorMatches, `cannot run 'TPM2_PolicyPCR values assertion' task in root branch: TPM returned an error for parameter 1 whilst executing command TPM_CC_PolicyPCR: TPM_RC_VALUE \(value is out of range or is not correct for the context\)`)
+	c.Check(err, ErrorMatches, `cannot run 'TPM2_PolicyPCR values assertion' task in root branch: TPM returned an error for parameter 1 whilst executing command TPM_CC_PolicyPCR: TPM_RC_VALUE \+ TPM_RC_P \+ TPM_RC_1 \(value is out of range or is not correct for the context\)`)
 	var e *tpm2.TPMParameterError
 	c.Assert(err, internal_testutil.ErrorAs, &e)
 	c.Check(e, DeepEquals, &tpm2.TPMParameterError{TPMError: &tpm2.TPMError{Command: tpm2.CommandPolicyPCR, Code: tpm2.ErrorValue}, Index: 1})
@@ -3622,7 +3622,7 @@ func (s *policySuite) TestPolicyPCRDigestFails(c *C) {
 	pcrs := tpm2.PCRSelectionList{{Hash: tpm2.HashAlgorithmSHA256, Select: []int{4, 7}}}
 
 	err := s.testPolicyPCRDigest(c, make([]byte, 32), pcrs)
-	c.Check(err, ErrorMatches, `cannot run 'TPM2_PolicyPCR assertion' task in root branch: TPM returned an error for parameter 1 whilst executing command TPM_CC_PolicyPCR: TPM_RC_VALUE \(value is out of range or is not correct for the context\)`)
+	c.Check(err, ErrorMatches, `cannot run 'TPM2_PolicyPCR assertion' task in root branch: TPM returned an error for parameter 1 whilst executing command TPM_CC_PolicyPCR: TPM_RC_VALUE \+ TPM_RC_P \+ TPM_RC_1 \(value is out of range or is not correct for the context\)`)
 
 	var e *tpm2.TPMParameterError
 	c.Assert(err, internal_testutil.ErrorAs, &e)

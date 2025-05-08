@@ -307,7 +307,7 @@ func (s *hierarchySuite) TestHierarchyControlReenableOwnerWrongAuth(c *C) {
 		state:       false,
 	})
 	err := s.TPM.HierarchyControl(s.TPM.OwnerHandleContext(), HandleOwner, true, nil)
-	c.Check(err, ErrorMatches, `TPM returned an error for handle 1 whilst executing command TPM_CC_HierarchyControl: TPM_RC_HIERARCHY \(hierarchy is not enabled or is not correct for the use\)`)
+	c.Check(err, ErrorMatches, `TPM returned an error for handle 1 whilst executing command TPM_CC_HierarchyControl: TPM_RC_HIERARCHY \+ TPM_RC_H \+ TPM_RC_1 \(hierarchy is not enabled or is not correct for the use\)`)
 	c.Check(IsTPMHandleError(err, ErrorHierarchy, CommandHierarchyControl, 1), internal_testutil.IsTrue)
 }
 

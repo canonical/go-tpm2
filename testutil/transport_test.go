@@ -1073,7 +1073,7 @@ func (s *transportSuite) TestNoManualRestoreHierarchyAuthChangeWithCommandEncryp
 
 	c.Check(s.TPM.HierarchyChangeAuth(s.TPM.OwnerHandleContext(), []byte("foo"), session.WithAttrs(tpm2.AttrCommandEncrypt)), IsNil)
 	c.Check(s.TPM.Close(), ErrorMatches, `cannot complete close operation on Transport: cannot cleanup TPM state because of the following errors:\n`+
-		`- cannot clear auth value for TPM_RH_OWNER: TPM returned an error for session 1 whilst executing command TPM_CC_HierarchyChangeAuth: TPM_RC_BAD_AUTH \(authorization failure without DA implications\)\n`)
+		`- cannot clear auth value for TPM_RH_OWNER: TPM returned an error for session 1 whilst executing command TPM_CC_HierarchyChangeAuth: TPM_RC_BAD_AUTH \+ TPM_RC_S \+ TPM_RC_1 \(authorization failure without DA implications\)\n`)
 }
 
 func (s *transportSuite) TestRestoreHierarchyAuthFailsIfPlatformIsDisabled(c *C) {
@@ -1086,7 +1086,7 @@ func (s *transportSuite) TestRestoreHierarchyAuthFailsIfPlatformIsDisabled(c *C)
 	c.Check(s.TPM.HierarchyControl(s.TPM.PlatformHandleContext(), tpm2.HandlePlatform, false, nil), IsNil)
 
 	c.Check(s.TPM.Close(), ErrorMatches, `cannot complete close operation on Transport: cannot cleanup TPM state because of the following errors:\n`+
-		`- cannot clear auth value for TPM_RH_OWNER: TPM returned an error for handle 1 whilst executing command TPM_CC_HierarchyChangeAuth: TPM_RC_HIERARCHY \(hierarchy is not enabled or is not correct for the use\)\n`)
+		`- cannot clear auth value for TPM_RH_OWNER: TPM returned an error for handle 1 whilst executing command TPM_CC_HierarchyChangeAuth: TPM_RC_HIERARCHY \+ TPM_RC_H \+ TPM_RC_1 \(hierarchy is not enabled or is not correct for the use\)\n`)
 }
 
 func (s *transportSuite) TestRestoreHierarchyAuthFailsIfHierarchyIsDisabled(c *C) {
@@ -1099,7 +1099,7 @@ func (s *transportSuite) TestRestoreHierarchyAuthFailsIfHierarchyIsDisabled(c *C
 	c.Check(s.TPM.HierarchyControl(s.TPM.OwnerHandleContext(), tpm2.HandleOwner, false, nil), IsNil)
 
 	c.Check(s.TPM.Close(), ErrorMatches, `cannot complete close operation on Transport: cannot cleanup TPM state because of the following errors:\n`+
-		`- cannot clear auth value for TPM_RH_OWNER: TPM returned an error for handle 1 whilst executing command TPM_CC_HierarchyChangeAuth: TPM_RC_HIERARCHY \(hierarchy is not enabled or is not correct for the use\)\n`)
+		`- cannot clear auth value for TPM_RH_OWNER: TPM returned an error for handle 1 whilst executing command TPM_CC_HierarchyChangeAuth: TPM_RC_HIERARCHY \+ TPM_RC_H \+ TPM_RC_1 \(hierarchy is not enabled or is not correct for the use\)\n`)
 }
 
 func (s *transportSuite) testRestorePrimaryPolicy(c *C, handle tpm2.Handle, features TPMFeatureFlags) {
@@ -1153,7 +1153,7 @@ func (s *transportSuite) TestRestorePrimaryPolicyAfterDisablingHierarchyAndPlatf
 	c.Check(s.TPM.HierarchyControl(s.TPM.PlatformHandleContext(), tpm2.HandlePlatform, false, nil), IsNil)
 
 	c.Check(s.TPM.Close(), ErrorMatches, `cannot complete close operation on Transport: cannot cleanup TPM state because of the following errors:
-- cannot clear auth policy for TPM_RH_OWNER: TPM returned an error for handle 1 whilst executing command TPM_CC_SetPrimaryPolicy: TPM_RC_HIERARCHY \(hierarchy is not enabled or is not correct for the use\)
+- cannot clear auth policy for TPM_RH_OWNER: TPM returned an error for handle 1 whilst executing command TPM_CC_SetPrimaryPolicy: TPM_RC_HIERARCHY \+ TPM_RC_H \+ TPM_RC_1 \(hierarchy is not enabled or is not correct for the use\)
 `)
 }
 
@@ -1190,7 +1190,7 @@ func (s *transportSuite) TestRestoreDisableClearFailsIfPlatformIsDisabled(c *C) 
 	c.Check(s.TPM.HierarchyControl(s.TPM.PlatformHandleContext(), tpm2.HandlePlatform, false, nil), IsNil)
 
 	c.Check(s.TPM.Close(), ErrorMatches, `cannot complete close operation on Transport: cannot cleanup TPM state because of the following errors:\n`+
-		`- cannot restore disableClear: TPM returned an error for handle 1 whilst executing command TPM_CC_ClearControl: TPM_RC_HIERARCHY \(hierarchy is not enabled or is not correct for the use\)\n`)
+		`- cannot restore disableClear: TPM returned an error for handle 1 whilst executing command TPM_CC_ClearControl: TPM_RC_HIERARCHY \+ TPM_RC_H \+ TPM_RC_1 \(hierarchy is not enabled or is not correct for the use\)\n`)
 }
 
 func (s *transportSuite) TestRestoreDisableClearIgnoresErrorWhenPermitted(c *C) {
@@ -1219,7 +1219,7 @@ func (s *transportSuite) TestRestoreDACounter(c *C) {
 
 	index.SetAuthValue(nil)
 	err = s.TPM.NVWrite(index, index, []byte("bar"), 0, nil)
-	c.Check(err, ErrorMatches, `TPM returned an error for session 1 whilst executing command TPM_CC_NV_Write: TPM_RC_AUTH_FAIL \(the authorization HMAC check failed and DA counter incremented\)`)
+	c.Check(err, ErrorMatches, `TPM returned an error for session 1 whilst executing command TPM_CC_NV_Write: TPM_RC_AUTH_FAIL \+ TPM_RC_S \+ TPM_RC_1 \(the authorization HMAC check failed and DA counter incremented\)`)
 
 	props, err := s.TPM.GetCapabilityTPMProperties(tpm2.PropertyLockoutCounter, 1)
 	c.Check(err, IsNil)
@@ -1495,7 +1495,7 @@ func (s *transportSuite) TestEvictPersistentObjectError(c *C) {
 	c.Check(s.TPM.HierarchyControl(s.TPM.PlatformHandleContext(), tpm2.HandlePlatform, false, nil), IsNil)
 
 	c.Check(s.TPM.Close(), ErrorMatches, `cannot complete close operation on Transport: cannot cleanup TPM state because of the following errors:\n`+
-		`- cannot evict 0x81000001: TPM returned an error for handle 1 whilst executing command TPM_CC_EvictControl: TPM_RC_HIERARCHY \(hierarchy is not enabled or is not correct for the use\)\n`)
+		`- cannot evict 0x81000001: TPM returned an error for handle 1 whilst executing command TPM_CC_EvictControl: TPM_RC_HIERARCHY \+ TPM_RC_H \+ TPM_RC_1 \(hierarchy is not enabled or is not correct for the use\)\n`)
 }
 
 func (s *transportSuite) TestUndefineNVIndex(c *C) {
@@ -1544,7 +1544,7 @@ func (s *transportSuite) TestUndefineNVIndexError(c *C) {
 	c.Check(s.TPM.HierarchyControl(s.TPM.PlatformHandleContext(), tpm2.HandlePlatform, false, nil), IsNil)
 
 	c.Check(s.TPM.Close(), ErrorMatches, `cannot complete close operation on Transport: cannot cleanup TPM state because of the following errors:\n`+
-		`- cannot undefine 0x01800000: TPM returned an error for handle 1 whilst executing command TPM_CC_NV_UndefineSpace: TPM_RC_HIERARCHY \(hierarchy is not enabled or is not correct for the use\)\n`)
+		`- cannot undefine 0x01800000: TPM returned an error for handle 1 whilst executing command TPM_CC_NV_UndefineSpace: TPM_RC_HIERARCHY \+ TPM_RC_H \+ TPM_RC_1 \(hierarchy is not enabled or is not correct for the use\)\n`)
 }
 
 func (s *transportSuite) TestUndefinePolicyDeleteNVIndex(c *C) {
@@ -1766,7 +1766,7 @@ func (s *transportSuite) TestRestoreCommandCodeAuditStatusFailsIfPlatformIsDisab
 	c.Check(s.TPM.HierarchyControl(s.TPM.PlatformHandleContext(), tpm2.HandlePlatform, false, nil), IsNil)
 
 	c.Check(s.TPM.Close(), ErrorMatches, `cannot complete close operation on Transport: cannot cleanup TPM state because of the following errors:\n`+
-		`- cannot restore command code audit alg: TPM returned an error for handle 1 whilst executing command TPM_CC_SetCommandCodeAuditStatus: TPM_RC_HIERARCHY \(hierarchy is not enabled or is not correct for the use\)\n`)
+		`- cannot restore command code audit alg: TPM returned an error for handle 1 whilst executing command TPM_CC_SetCommandCodeAuditStatus: TPM_RC_HIERARCHY \+ TPM_RC_H \+ TPM_RC_1 \(hierarchy is not enabled or is not correct for the use\)\n`)
 }
 
 func (s *transportSuite) TestRestoreCommandCodeAuditStatusIgnoresErrorWhenPermitted(c *C) {

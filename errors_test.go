@@ -23,7 +23,7 @@ func (s *errorsSuite) TestDecodeSuccess(c *C) {
 
 func (s *errorsSuite) TestDecodeBadTag(c *C) {
 	err := DecodeResponseCode(CommandGetCapability, ResponseBadTag)
-	c.Check(err, ErrorMatches, "TPM returned a TPM_RC_BAD_TAG error whilst executing command TPM_CC_GetCapability")
+	c.Check(err, ErrorMatches, "TPM returned an error whilst executing command TPM_CC_GetCapability: TPM_RC_BAD_TAG \\(defined for compatibility with TPM 1.2\\)")
 	c.Assert(err, internal_testutil.ConvertibleTo, &TPMErrorBadTag{})
 	c.Check(err.(*TPMErrorBadTag), DeepEquals, &TPMErrorBadTag{Command: CommandGetCapability})
 	c.Check(err.(*TPMErrorBadTag).ResponseCode(), Equals, ResponseBadTag)
@@ -51,67 +51,71 @@ func (s *errorsSuite) TestDecodeInvalidSession(c *C) {
 }
 
 func (s *errorsSuite) TestDecodeVendorError(c *C) {
-	rc := ResponseCode(0xa5a5057e)
+	rc := ResponseCode(0x57e)
 	err := DecodeResponseCode(CommandLoad, rc)
-	c.Check(err, ErrorMatches, "TPM returned a vendor defined error whilst executing command TPM_CC_Load: 0xa5a5057e")
+	c.Check(err, ErrorMatches, "TPM returned a vendor defined error whilst executing command TPM_CC_Load: 0x0000057e")
 	c.Assert(err, internal_testutil.ConvertibleTo, &TPMVendorError{})
 	c.Check(err.(*TPMVendorError), DeepEquals, &TPMVendorError{Command: CommandLoad, Code: rc})
 }
 
 func (s *errorsSuite) TestDecodeWarning(c *C) {
-	err := DecodeResponseCode(CommandNVWrite, 0x923)
+	err := DecodeResponseCode(CommandNVWrite, ResponseNVUnavailable)
 	c.Check(err, ErrorMatches, "TPM returned a warning whilst executing command TPM_CC_NV_Write: TPM_RC_NV_UNAVAILABLE \\(the command may require writing of NV and NV is not current accessible\\)")
 	c.Assert(err, internal_testutil.ConvertibleTo, &TPMWarning{})
 	c.Check(err.(*TPMWarning), DeepEquals, &TPMWarning{Command: CommandNVWrite, Code: WarningNVUnavailable})
-	c.Check(err.(*TPMWarning).ResponseCode(), Equals, ResponseCode(0x923))
+	c.Check(err.(*TPMWarning).ResponseCode(), Equals, ResponseNVUnavailable)
 }
 
 func (s *errorsSuite) TestDecodeWarningSelfTest(c *C) {
-	err := DecodeResponseCode(CommandGetRandom, 0x90a)
+	err := DecodeResponseCode(CommandGetRandom, ResponseTesting)
 	c.Check(err, ErrorMatches, "TPM returned a warning whilst executing command TPM_CC_GetRandom: TPM_RC_TESTING \\(TPM is performing self-tests\\)")
 	c.Assert(err, internal_testutil.ConvertibleTo, &TPMWarning{})
 	c.Check(err.(*TPMWarning), DeepEquals, &TPMWarning{Command: CommandGetRandom, Code: WarningTesting})
-	c.Check(err.(*TPMWarning).ResponseCode(), Equals, ResponseCode(0x90a))
+	c.Check(err.(*TPMWarning).ResponseCode(), Equals, ResponseTesting)
 }
 
 func (s *errorsSuite) TestDecodeError0(c *C) {
-	err := DecodeResponseCode(CommandUnseal, 0x128)
+	err := DecodeResponseCode(CommandUnseal, ResponsePCRChanged)
 	c.Check(err, ErrorMatches, "TPM returned an error whilst executing command TPM_CC_Unseal: TPM_RC_PCR_CHANGED \\(PCR have changed since checked\\)")
 	c.Assert(err, internal_testutil.ConvertibleTo, &TPMError{})
 	c.Check(err.(*TPMError), DeepEquals, &TPMError{Command: CommandUnseal, Code: ErrorPCRChanged})
-	c.Check(err.(*TPMError).ResponseCode(), Equals, ResponseCode(0x128))
+	c.Check(err.(*TPMError).ResponseCode(), Equals, ResponsePCRChanged)
 }
 
 func (s *errorsSuite) TestDecodeError1(c *C) {
-	err := DecodeResponseCode(CommandGetRandom, 0x9a)
-	c.Check(err, ErrorMatches, "TPM returned an error whilst executing command TPM_CC_GetRandom: TPM_RC_INSUFFICIENT \\(the TPM was unable to unmarshal a value because there were not enough octets in the input buffer\\)")
-	c.Assert(err, internal_testutil.ConvertibleTo, &TPMError{})
-	c.Check(err.(*TPMError), DeepEquals, &TPMError{Command: CommandGetRandom, Code: ErrorInsufficient})
-	c.Check(err.(*TPMError).ResponseCode(), Equals, ResponseCode(0x9a))
+	err := DecodeResponseCode(CommandStirRandom, ResponseInsufficient.SetParameterIndex(1))
+	c.Check(err, ErrorMatches, "TPM returned an error for parameter 1 whilst executing command TPM_CC_StirRandom: TPM_RC_INSUFFICIENT \\+ TPM_RC_P \\+ TPM_RC_1 \\(the TPM was unable to unmarshal a value because there were not enough octets in the input buffer\\)")
+	c.Assert(err, internal_testutil.ConvertibleTo, &TPMParameterError{})
+	c.Check(err.(*TPMParameterError), DeepEquals, &TPMParameterError{TPMError: &TPMError{Command: CommandStirRandom, Code: ErrorInsufficient}, Index: 1})
+	c.Check(err.(*TPMParameterError).ResponseCode(), Equals, ResponseInsufficient.SetParameterIndex(1))
+	c.Check(err.(*TPMParameterError).TPMError.ResponseCode(), Equals, ResponseInsufficient)
 }
 
 func (s *errorsSuite) TestDecodeParameterError(c *C) {
-	err := DecodeResponseCode(CommandStartAuthSession, 0x4c9)
-	c.Check(err, ErrorMatches, "TPM returned an error for parameter 4 whilst executing command TPM_CC_StartAuthSession: TPM_RC_MODE \\(mode of operation not supported\\)")
+	err := DecodeResponseCode(CommandStartAuthSession, ResponseMode.SetParameterIndex(4))
+	c.Check(err, ErrorMatches, "TPM returned an error for parameter 4 whilst executing command TPM_CC_StartAuthSession: TPM_RC_MODE \\+ TPM_RC_P \\+ TPM_RC_4 \\(mode of operation not supported\\)")
 	c.Assert(err, internal_testutil.ConvertibleTo, &TPMParameterError{})
 	c.Check(err.(*TPMParameterError), DeepEquals, &TPMParameterError{TPMError: &TPMError{Command: CommandStartAuthSession, Code: ErrorMode}, Index: 4})
-	c.Check(err.(*TPMParameterError).ResponseCode(), Equals, ResponseCode(0x4c9))
+	c.Check(err.(*TPMParameterError).ResponseCode(), Equals, ResponseMode.SetParameterIndex(4))
+	c.Check(err.(*TPMParameterError).TPMError.ResponseCode(), Equals, ResponseMode)
 }
 
 func (s *errorsSuite) TestDecodeSessionError(c *C) {
-	err := DecodeResponseCode(CommandUnseal, 0x98e)
-	c.Check(err, ErrorMatches, "TPM returned an error for session 1 whilst executing command TPM_CC_Unseal: TPM_RC_AUTH_FAIL \\(the authorization HMAC check failed and DA counter incremented\\)")
+	err := DecodeResponseCode(CommandUnseal, ResponseAuthFail.SetSessionIndex(1))
+	c.Check(err, ErrorMatches, "TPM returned an error for session 1 whilst executing command TPM_CC_Unseal: TPM_RC_AUTH_FAIL \\+ TPM_RC_S \\+ TPM_RC_1 \\(the authorization HMAC check failed and DA counter incremented\\)")
 	c.Assert(err, internal_testutil.ConvertibleTo, &TPMSessionError{})
 	c.Check(err.(*TPMSessionError), DeepEquals, &TPMSessionError{TPMError: &TPMError{Command: CommandUnseal, Code: ErrorAuthFail}, Index: 1})
-	c.Check(err.(*TPMSessionError).ResponseCode(), Equals, ResponseCode(0x98e))
+	c.Check(err.(*TPMSessionError).ResponseCode(), Equals, ResponseAuthFail.SetSessionIndex(1))
+	c.Check(err.(*TPMSessionError).TPMError.ResponseCode(), Equals, ResponseAuthFail)
 }
 
 func (s *errorsSuite) TestDecodeHandleError(c *C) {
-	err := DecodeResponseCode(CommandCertify, 0x29c)
-	c.Check(err, ErrorMatches, "TPM returned an error for handle 2 whilst executing command TPM_CC_Certify: TPM_RC_KEY \\(key fields are not compatible with the selected use\\)")
+	err := DecodeResponseCode(CommandCertify, ResponseKey.SetHandleIndex(2))
+	c.Check(err, ErrorMatches, "TPM returned an error for handle 2 whilst executing command TPM_CC_Certify: TPM_RC_KEY \\+ TPM_RC_H \\+ TPM_RC_2 \\(key fields are not compatible with the selected use\\)")
 	c.Assert(err, internal_testutil.ConvertibleTo, &TPMHandleError{})
 	c.Check(err.(*TPMHandleError), DeepEquals, &TPMHandleError{TPMError: &TPMError{Command: CommandCertify, Code: ErrorKey}, Index: 2})
-	c.Check(err.(*TPMHandleError).ResponseCode(), Equals, ResponseCode(0x29c))
+	c.Check(err.(*TPMHandleError).ResponseCode(), Equals, ResponseKey.SetHandleIndex(2))
+	c.Check(err.(*TPMHandleError).TPMError.ResponseCode(), Equals, ResponseKey)
 }
 
 func (s *errorsSuite) TestTPMErrorIs1(c *C) {

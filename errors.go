@@ -5,9 +5,9 @@
 package tpm2
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
+	"math"
 )
 
 const (
@@ -16,14 +16,14 @@ const (
 	// or to match any property when using IsMissingPropertyError with the
 	// CommandCode type parameter.
 	//
-	// As this sets the reserved bits, this can always be distringuished from a
-	// valid command code.
+	// As this value sets the 2 MSB reserved bits which should always be zero, this
+	// can always be distringuished from a valid command code.
 	AnyCommandCode CommandCode = 0xc0000000
 
 	// AnyErrorCode is used to match any error code when using IsTPMError,
 	// IsTPMHandleError, IsTPMParameterError and IsTPMSessionError. As this
-	// is beyond the value of any error codes defined in this package, it
-	// can always be distinguished from a valid error code.
+	// is beyond the range of valid format-one error codes, it can always be
+	// distinguished from a valid error code.
 	AnyErrorCode ErrorCode = 0xff
 
 	// AnyHandle is used to match any handle when using IsResourceUnavailableError,
@@ -41,12 +41,12 @@ const (
 	AnySessionIndex int = -1
 
 	// AnyWarningCode is used to match any warning code when using IsTPMWarning. As this
-	// is beyond the value of any warning code, it can always be distinguished from a valid
-	// warning code.
+	// is beyond the range of any valid warning code, it can always be distinguished from
+	// a valid warning code.
 	AnyWarningCode WarningCode = 0xff
 
 	// AnyVendorResponseCode is used to match any response code when using IsTPMVendorError.
-	// As bit 10 is set, this is always an invalid vendor code so can be distinguished from
+	// As bit 10 is clear, this is always an invalid vendor code so can be distinguished from
 	// a valid vendor code.
 	AnyVendorResponseCode ResponseCode = 0x900
 
@@ -107,6 +107,8 @@ func (e *MissingPropertyError[T]) Is(target error) bool {
 	return (t.Capability == AnyCapability || t.Capability == e.Capability) && (t.Property.isMissingPropertyErrorAnyValue() || t.Property == e.Property)
 }
 
+// IsMissingPropertyError determines if the supplied error is a *[MissingPropertyError] with the specified
+// capability and property.
 func IsMissingPropertyError[T MissingPropertyErrorType](err error, capability Capability, property T) bool {
 	return errors.Is(err, &MissingPropertyError[T]{Capability: capability, Property: property})
 }
@@ -120,7 +122,7 @@ type ResourceUnavailableError struct {
 }
 
 func (e *ResourceUnavailableError) Error() string {
-	return fmt.Sprintf("a resource at handle 0x%08x is not available on the TPM", e.Handle)
+	return fmt.Sprintf("a resource at handle %#08x is not available on the TPM", e.Handle)
 }
 
 func (e *ResourceUnavailableError) Unwrap() error {
@@ -209,27 +211,30 @@ func (e *TransportError) Unwrap() error {
 }
 
 // TPMVendorError represents a TPM response that indicates a vendor-specific error
-// (rc & 0x580 == 0x500).
+// (where rc & 0x580 == 0x500).
 type TPMVendorError struct {
 	Command CommandCode  // Command code associated with this error
 	Code    ResponseCode // Response code
 }
 
+// CommandCode returns the command code that generated this error.
 func (e *TPMVendorError) CommandCode() CommandCode {
 	return e.Command
 }
 
 // ResponseCode returns a TPM response code for this error.
-// It will panic if it cannot be converted to a valid vendor error response code.
+// It will panic if the [ResponseCode] field is not a valid vendor error response
+// code, ie, the F bit (7) is set, or the V bit (8) is clear, or the T bit (10)
+// is clear.
 func (e *TPMVendorError) ResponseCode() ResponseCode {
 	if e.Code.F() || !e.Code.V() || !e.Code.T() {
-		panic("invalid vendor error")
+		panic(fmt.Errorf("%w (response code is not format-0, TPM2, and vendor defined)", InvalidResponseCodeError(e.Code)))
 	}
 	return e.Code
 }
 
 func (e *TPMVendorError) Error() string {
-	return fmt.Sprintf("TPM returned a vendor defined error whilst executing command %s: 0x%08x", e.Command, e.Code)
+	return fmt.Sprintf("TPM returned a vendor defined error whilst executing command %s: %#08x", e.Command, responseCodeFormatter(e))
 }
 
 func (e *TPMVendorError) Is(target error) bool {
@@ -245,88 +250,93 @@ func (e *TPMVendorError) Is(target error) bool {
 type WarningCode uint8
 
 const (
-	WarningContextGap     WarningCode = 0x01 // TPM_RC_CONTEXT_GAP
-	WarningObjectMemory   WarningCode = 0x02 // TPM_RC_OBJECT_MEMORY
-	WarningSessionMemory  WarningCode = 0x03 // TPM_RC_SESSION_MEMORY
-	WarningMemory         WarningCode = 0x04 // TPM_RC_MEMORY
-	WarningSessionHandles WarningCode = 0x05 // TPM_RC_SESSION_HANDLES
-	WarningObjectHandles  WarningCode = 0x06 // TPM_RC_OBJECT_HANDLES
+	WarningContextGap     WarningCode = WarningCode(ResponseContextGap - rcWarn)     // TPM_RC_CONTEXT_GAP
+	WarningObjectMemory   WarningCode = WarningCode(ResponseObjectMemory - rcWarn)   // TPM_RC_OBJECT_MEMORY
+	WarningSessionMemory  WarningCode = WarningCode(ResponseSessionMemory - rcWarn)  // TPM_RC_SESSION_MEMORY
+	WarningMemory         WarningCode = WarningCode(ResponseMemory - rcWarn)         // TPM_RC_MEMORY
+	WarningSessionHandles WarningCode = WarningCode(ResponseSessionHandles - rcWarn) // TPM_RC_SESSION_HANDLES
+	WarningObjectHandles  WarningCode = WarningCode(ResponseObjectHandles - rcWarn)  // TPM_RC_OBJECT_HANDLES
 
 	// WarningLocality corresponds to TPM_RC_LOCALITY and is returned for a command if a policy
 	// session is used for authorization and the session includes a TPM2_PolicyLocality assertion, but
 	// the command isn't executed with the authorized locality.
-	WarningLocality WarningCode = 0x07
+	WarningLocality WarningCode = WarningCode(ResponseLocality - rcWarn)
 
 	// WarningYielded corresponds to TPM_RC_YIELDED and is returned for any command that is suspended
 	// as a hint that the command can be retried. This is handled automatically when executing
 	// commands using CommandContext by resubmitting the command.
-	WarningYielded WarningCode = 0x08
+	WarningYielded WarningCode = WarningCode(ResponseYielded - rcWarn)
 
 	// WarningCanceled corresponds to TPM_RC_CANCELED and is returned for any command that is canceled
 	// before being able to complete.
-	WarningCanceled WarningCode = 0x09
+	WarningCanceled WarningCode = WarningCode(ResponseCanceled - rcWarn)
 
-	WarningTesting     WarningCode = 0x0a // TPM_RC_TESTING
-	WarningReferenceH0 WarningCode = 0x10 // TPM_RC_REFERENCE_H0
-	WarningReferenceH1 WarningCode = 0x11 // TPM_RC_REFERENCE_H1
-	WarningReferenceH2 WarningCode = 0x12 // TPM_RC_REFERENCE_H2
-	WarningReferenceH3 WarningCode = 0x13 // TPM_RC_REFERENCE_H3
-	WarningReferenceH4 WarningCode = 0x14 // TPM_RC_REFERENCE_H4
-	WarningReferenceH5 WarningCode = 0x15 // TPM_RC_REFERENCE_H5
-	WarningReferenceH6 WarningCode = 0x16 // TPM_RC_REFERENCE_H6
-	WarningReferenceS0 WarningCode = 0x18 // TPM_RC_REFERENCE_S0
-	WarningReferenceS1 WarningCode = 0x19 // TPM_RC_REFERENCE_S1
-	WarningReferenceS2 WarningCode = 0x1a // TPM_RC_REFERENCE_S2
-	WarningReferenceS3 WarningCode = 0x1b // TPM_RC_REFERENCE_S3
-	WarningReferenceS4 WarningCode = 0x1c // TPM_RC_REFERENCE_S4
-	WarningReferenceS5 WarningCode = 0x1d // TPM_RC_REFERENCE_S5
-	WarningReferenceS6 WarningCode = 0x1e // TPM_RC_REFERENCE_S6
+	WarningTesting     WarningCode = WarningCode(ResponseTesting - rcWarn)     // TPM_RC_TESTING
+	WarningReferenceH0 WarningCode = WarningCode(ResponseReferenceH0 - rcWarn) // TPM_RC_REFERENCE_H0
+	WarningReferenceH1 WarningCode = WarningCode(ResponseReferenceH1 - rcWarn) // TPM_RC_REFERENCE_H1
+	WarningReferenceH2 WarningCode = WarningCode(ResponseReferenceH2 - rcWarn) // TPM_RC_REFERENCE_H2
+	WarningReferenceH3 WarningCode = WarningCode(ResponseReferenceH3 - rcWarn) // TPM_RC_REFERENCE_H3
+	WarningReferenceH4 WarningCode = WarningCode(ResponseReferenceH4 - rcWarn) // TPM_RC_REFERENCE_H4
+	WarningReferenceH5 WarningCode = WarningCode(ResponseReferenceH5 - rcWarn) // TPM_RC_REFERENCE_H5
+	WarningReferenceH6 WarningCode = WarningCode(ResponseReferenceH6 - rcWarn) // TPM_RC_REFERENCE_H6
+	WarningReferenceS0 WarningCode = WarningCode(ResponseReferenceS0 - rcWarn) // TPM_RC_REFERENCE_S0
+	WarningReferenceS1 WarningCode = WarningCode(ResponseReferenceS1 - rcWarn) // TPM_RC_REFERENCE_S1
+	WarningReferenceS2 WarningCode = WarningCode(ResponseReferenceS2 - rcWarn) // TPM_RC_REFERENCE_S2
+	WarningReferenceS3 WarningCode = WarningCode(ResponseReferenceS3 - rcWarn) // TPM_RC_REFERENCE_S3
+	WarningReferenceS4 WarningCode = WarningCode(ResponseReferenceS4 - rcWarn) // TPM_RC_REFERENCE_S4
+	WarningReferenceS5 WarningCode = WarningCode(ResponseReferenceS5 - rcWarn) // TPM_RC_REFERENCE_S5
+	WarningReferenceS6 WarningCode = WarningCode(ResponseReferenceS6 - rcWarn) // TPM_RC_REFERENCE_S6
 
 	// WarningNVRate corresponds to TPM_RC_NV_RATE and is returned for any command that requires NV
 	// access if NV access is currently rate limited to prevent the NV memory from wearing out.
-	WarningNVRate WarningCode = 0x20
+	WarningNVRate WarningCode = WarningCode(ResponseNVRate - rcWarn)
 
 	// WarningLockout corresponds to TPM_RC_LOCKOUT and is returned for any command that requires
 	// authorization for an entity that is subject to dictionary attack protection, and the TPM is in
 	// dictionary attack lockout mode.
-	WarningLockout WarningCode = 0x21
+	WarningLockout WarningCode = WarningCode(ResponseLockout - rcWarn)
 
 	// WarningRetry corresponds to TPM_RC_RETRY and is returned for any command if the TPM was not
 	// able to start the command. This is handled automatically when executing comands using
 	// CommandContext by resubmitting the command.
-	WarningRetry WarningCode = 0x22
+	WarningRetry WarningCode = WarningCode(ResponseRetry - rcWarn)
 
 	// WarningNVUnavailable corresponds to TPM_RC_NV_UNAVAILABLE and is returned for any command that
 	// requires NV access but NV memory is currently not available.
-	WarningNVUnavailable WarningCode = 0x23
+	WarningNVUnavailable WarningCode = WarningCode(ResponseNVUnavailable - rcWarn)
 )
 
-// TPMWarning represents a TPM response that indicates a warning.
+// ResponseCode returns a TPM response code for this warning code.
+// It will panic if it cannot be converted to a valid response code.
+func (c WarningCode) ResponseCode() ResponseCode {
+	rc := rcWarn + ResponseCode(c)
+	if rc.F() {
+		// The result overflowed into bit 7.
+		panic(fmt.Errorf("%w (warning code results in a response code that overflows into bit 7)", InvalidResponseCodeError(rc)))
+	}
+	return rc
+}
+
+// TPMWarning represents a TPM response that indicates a warning,
+// where 0x900 < rc <= 0x97f.
 type TPMWarning struct {
 	Command CommandCode // Command code associated with this error
 	Code    WarningCode // Warning code
 }
 
+// CommandCode returns the command code that generated this error.
 func (e *TPMWarning) CommandCode() CommandCode {
 	return e.Command
 }
 
-// ResponseCode returns a TPM response code for this error.
-// It will panic if it cannot be converted to a valid warning response code.
+// ResponseCode returns a TPM response code for this warning.
+// It will panic if it cannot be converted to a valid response code.
 func (e *TPMWarning) ResponseCode() ResponseCode {
-	if ResponseCode(e.Code)&responseCodeE0 != ResponseCode(e.Code) {
-		panic("invalid warning code")
-	}
-	return responseCodeS | responseCodeV | ResponseCode(e.Code)
+	return e.Code.ResponseCode()
 }
 
 func (e *TPMWarning) Error() string {
-	var builder bytes.Buffer
-	fmt.Fprintf(&builder, "TPM returned a warning whilst executing command %s: %s", e.Command, e.Code)
-	if desc, hasDesc := warningCodeDescriptions[e.Code]; hasDesc {
-		fmt.Fprintf(&builder, " (%s)", desc)
-	}
-	return builder.String()
+	return fmt.Sprintf("TPM returned a warning whilst executing command %s: %+s", e.Command, responseCodeFormatter(e))
 }
 
 func (e *TPMWarning) Is(target error) bool {
@@ -339,151 +349,151 @@ func (e *TPMWarning) Is(target error) bool {
 
 // ErrorCode represents a TPM error. This type represents TCG defined format 0 response codes
 // without the severity bit set (response codes 0x100 to 0x17f), and format 1 response codes
-// (where rc & 0x80 != 0).
+// (response codes 0x080 to 0x0bf).
 //
-// Format 0 error numbers are 7 bits wide and are represented by codes 0x00 to 0x7f. Format 1 error
-// numbers are 6 bits wide and are represented by codes 0x80 to 0xbf.
+// Format 0 error numbers are 7 bits wide and are represented by codes 0x00 to 0x7f. Format 1
+// error numbers are 6 bits wide and are represented by codes 0x80 to 0xbf.
 type ErrorCode uint8
 
 const (
 	// ErrorInitialize corresponds to TPM_RC_INITIALIZE and is returned for any command executed
 	// between a _TPM_Init event and a TPM2_Startup command.
-	ErrorInitialize ErrorCode = 0x00
+	ErrorInitialize ErrorCode = ErrorCode(ResponseInitialize - rcVer1)
 
 	// ErrorFailure corresponds to TPM_RC_FAILURE and is returned for any command if the TPM is in
 	// failure mode.
-	ErrorFailure ErrorCode = 0x01
+	ErrorFailure ErrorCode = ErrorCode(ResponseFailure - rcVer1)
 
-	ErrorSequence  ErrorCode = 0x03 // TPM_RC_SEQUENCE
-	ErrorDisabled  ErrorCode = 0x20 // TPM_RC_DISABLED
-	ErrorExclusive ErrorCode = 0x21 // TPM_RC_EXCLUSIVE
+	ErrorSequence  ErrorCode = ErrorCode(ResponseSequence - rcVer1)  // TPM_RC_SEQUENCE
+	ErrorDisabled  ErrorCode = ErrorCode(ResponseDisabled - rcVer1)  // TPM_RC_DISABLED
+	ErrorExclusive ErrorCode = ErrorCode(ResponseExclusive - rcVer1) // TPM_RC_EXCLUSIVE
 
 	// ErrorAuthType corresponds to TPM_RC_AUTH_TYPE and is returned for a command where an
 	// authorization is required and the authorization type is expected to be a policy session, but
 	// another authorization type has been provided.
-	ErrorAuthType ErrorCode = 0x24
+	ErrorAuthType ErrorCode = ErrorCode(ResponseAuthType - rcVer1)
 
 	// ErrorAuthMissing corresponds to TPM_RC_AUTH_MISSING and is returned for a command that accepts
 	// a ResourceContext argument that requires authorization, but no authorization session has been
 	// provided in the command payload.
-	ErrorAuthMissing ErrorCode = 0x25
+	ErrorAuthMissing ErrorCode = ErrorCode(ResponseAuthType - rcVer1)
 
-	ErrorPolicy ErrorCode = 0x26 // TPM_RC_POLICY
-	ErrorPCR    ErrorCode = 0x27 // TPM_RC_PCR
+	ErrorPolicy ErrorCode = ErrorCode(ResponsePolicy - rcVer1) // TPM_RC_POLICY
+	ErrorPCR    ErrorCode = ErrorCode(ResponsePCR - rcVer1)    // TPM_RC_PCR
 
 	// ErrorPCRChanged corresponds to TPM_RC_PCR_CHANGED and is returned for a command where a policy
 	// session is used for authorization and the PCR contents have been updated since the last time
 	// that they were checked in the session with a TPM2_PolicyPCR assertion.
-	ErrorPCRChanged ErrorCode = 0x28
+	ErrorPCRChanged ErrorCode = ErrorCode(ResponsePCRChanged - rcVer1)
 
 	// ErrorUpgrade corresponds to TPM_RC_UPGRADE and is returned for any command that isn't
 	// TPM2_FieldUpgradeData if the TPM is in field upgrade mode.
-	ErrorUpgrade ErrorCode = 0x2d
+	ErrorUpgrade ErrorCode = ErrorCode(ResponseUpgrade - rcVer1)
 
-	ErrorTooManyContexts ErrorCode = 0x2e // TPM_RC_TOO_MANY_CONTEXTS
+	ErrorTooManyContexts ErrorCode = ErrorCode(ResponseTooManyContexts - rcVer1) // TPM_RC_TOO_MANY_CONTEXTS
 
 	// ErrorAuthUnavailable corresponds to TPM_RC_AUTH_UNAVAILABLE and is returned for a command where
 	// the provided authorization requires the use of the authorization value for an entity, but the
 	// authorization value cannot be used. For example, if the entity is an object and the command
 	// requires the user auth role but the object does not have the AttrUserWithAuth attribute.
-	ErrorAuthUnavailable ErrorCode = 0x2f
+	ErrorAuthUnavailable ErrorCode = ErrorCode(ResponseAuthUnavailable - rcVer1)
 
 	// ErrorReboot corresponds to TPM_RC_REBOOT and is returned for any command if the TPM requires a
 	// _TPM_Init event before it will execute any more commands.
-	ErrorReboot ErrorCode = 0x30
+	ErrorReboot ErrorCode = ErrorCode(ResponseReboot - rcVer1)
 
-	ErrorUnbalanced ErrorCode = 0x31 // TPM_RC_UNBALANCED
+	ErrorUnbalanced ErrorCode = ErrorCode(ResponseUnbalanced - rcVer1) // TPM_RC_UNBALANCED
 
 	// ErrorCommandSize corresponds to TPM_RC_COMMAND_SIZE and indicates that the value of the
 	// commandSize field in the command header does not match the size of the command packet
 	// transmitted to the TPM.
-	ErrorCommandSize ErrorCode = 0x42
+	ErrorCommandSize ErrorCode = ErrorCode(ResponseCommandSize - rcVer1)
 
 	// ErrorCommandCode corresponds to TPM_RC_COMMAND_CODE and is returned for any command that is not
 	// implemented by the TPM.
-	ErrorCommandCode ErrorCode = 0x43
+	ErrorCommandCode ErrorCode = ErrorCode(ResponseCommandCode - rcVer1)
 
-	ErrorAuthsize ErrorCode = 0x44 // TPM_RC_AUTHSIZE
+	ErrorAuthsize ErrorCode = ErrorCode(ResponseAuthsize - rcVer1) // TPM_RC_AUTHSIZE
 
 	// ErrorAuthContext corresponds to TPM_RC_AUTH_CONTEXT and is returned for any command that does
 	// not accept any sessions if sessions have been provided in the command payload.
-	ErrorAuthContext ErrorCode = 0x45
+	ErrorAuthContext ErrorCode = ErrorCode(ResponseAuthContext - rcVer1)
 
-	ErrorNVRange         ErrorCode = 0x46 // TPM_RC_NV_RANGE
-	ErrorNVSize          ErrorCode = 0x47 // TPM_RC_NV_SIZE
-	ErrorNVLocked        ErrorCode = 0x48 // TPM_RC_NV_LOCKED
-	ErrorNVAuthorization ErrorCode = 0x49 // TPM_RC_NV_AUTHORIZATION
-	ErrorNVUninitialized ErrorCode = 0x4a // TPM_RC_NV_UNINITIALIZED
-	ErrorNVSpace         ErrorCode = 0x4b // TPM_RC_NV_SPACE
-	ErrorNVDefined       ErrorCode = 0x4c // TPM_RC_NV_DEFINED
-	ErrorBadContext      ErrorCode = 0x50 // TPM_RC_BAD_CONTEXT
-	ErrorCpHash          ErrorCode = 0x51 // TPM_RC_CPHASH
-	ErrorParent          ErrorCode = 0x52 // TPM_RC_PARENT
-	ErrorNeedsTest       ErrorCode = 0x53 // TPM_RC_NEEDS_TEST
+	ErrorNVRange         ErrorCode = ErrorCode(ResponseNVRange - rcVer1)         // TPM_RC_NV_RANGE
+	ErrorNVSize          ErrorCode = ErrorCode(ResponseNVSize - rcVer1)          // TPM_RC_NV_SIZE
+	ErrorNVLocked        ErrorCode = ErrorCode(ResponseNVLocked - rcVer1)        // TPM_RC_NV_LOCKED
+	ErrorNVAuthorization ErrorCode = ErrorCode(ResponseNVAuthorization - rcVer1) // TPM_RC_NV_AUTHORIZATION
+	ErrorNVUninitialized ErrorCode = ErrorCode(ResponseNVUninitialized - rcVer1) // TPM_RC_NV_UNINITIALIZED
+	ErrorNVSpace         ErrorCode = ErrorCode(ResponseNVSpace - rcVer1)         // TPM_RC_NV_SPACE
+	ErrorNVDefined       ErrorCode = ErrorCode(ResponseNVDefined - rcVer1)       // TPM_RC_NV_DEFINED
+	ErrorBadContext      ErrorCode = ErrorCode(ResponseBadContext - rcVer1)      // TPM_RC_BAD_CONTEXT
+	ErrorCpHash          ErrorCode = ErrorCode(ResponseCpHash - rcVer1)          // TPM_RC_CPHASH
+	ErrorParent          ErrorCode = ErrorCode(ResponseParent - rcVer1)          // TPM_RC_PARENT
+	ErrorNeedsTest       ErrorCode = ErrorCode(ResponseNeedsTest - rcVer1)       // TPM_RC_NEEDS_TEST
 
 	// ErrorNoResult corresponds to TPM_RC_NO_RESULT and is returned for any command if the TPM
 	// cannot process a request due to an unspecified problem.
-	ErrorNoResult ErrorCode = 0x54
+	ErrorNoResult ErrorCode = ErrorCode(ResponseNoResult - rcVer1)
 
-	ErrorSensitive ErrorCode = 0x55 // TPM_RC_SENSITIVE
+	ErrorSensitive ErrorCode = ErrorCode(ResponseSensitive - rcVer1) // TPM_RC_SENSITIVE
 
-	errorCode1Start ErrorCode = 0x80
+	errorCode1Start ErrorCode = ErrorCode(rcFmt1)
 
-	ErrorAsymmetric ErrorCode = errorCode1Start + 0x01 // TPM_RC_ASYMMETRIC
+	ErrorAsymmetric ErrorCode = ErrorCode(ResponseAsymmetric) // TPM_RC_ASYMMETRIC
 
 	// ErrorAttributes corresponds to TPM_RC_ATTRIBUTES and is returned as a *TPMSessionError for a
 	// command in the following circumstances:
 	// * More than one SessionContext instance with the AttrCommandEncrypt attribute has been provided.
 	// * More than one SessionContext instance with the AttrResponseEncrypt attribute has been provided.
 	// * A SessionContext instance referencing a trial session has been provided for authorization.
-	ErrorAttributes ErrorCode = errorCode1Start + 0x02
+	ErrorAttributes ErrorCode = ErrorCode(ResponseAttributes)
 
 	// ErrorHash corresponds to TPM_RC_HASH and is returned as a *TPMParameterError error for any
 	// command that accepts a HashAlgorithmId parameter if the parameter value is not a valid digest
 	// algorithm.
-	ErrorHash ErrorCode = errorCode1Start + 0x03
+	ErrorHash ErrorCode = ErrorCode(ResponseHash)
 
 	// ErrorValue corresponds to TPM_RC_VALUE and is returned as a *TPMParameterError or
 	// *TPMHandleError for any command where an argument value is incorrect or out of range for the
 	// command.
-	ErrorValue ErrorCode = errorCode1Start + 0x04 // TPM_RC_VALUE
+	ErrorValue ErrorCode = ErrorCode(ResponseValue) // TPM_RC_VALUE
 
 	// ErrorHierarchy corresponds to TPM_RC_HIERARCHY and is returned as a *TPMHandleError error for
 	// any command that accepts a ResourceContext or Handle argument if that argument corresponds to
 	// a hierarchy on the TPM that has been disabled.
-	ErrorHierarchy ErrorCode = errorCode1Start + 0x05
+	ErrorHierarchy ErrorCode = ErrorCode(ResponseHierarchy)
 
-	ErrorKeySize ErrorCode = errorCode1Start + 0x07 // TPM_RC_KEY_SIZE
-	ErrorMGF     ErrorCode = errorCode1Start + 0x08 // TPM_RC_MGF
+	ErrorKeySize ErrorCode = ErrorCode(ResponseKeySize) // TPM_RC_KEY_SIZE
+	ErrorMGF     ErrorCode = ErrorCode(ResponseMGF)     // TPM_RC_MGF
 
 	// ErrorMode corresponds to TPM_RC_MODE and is returned as a *TPMParameterError error for any
 	// command that accepts a SymModeId parameter if the parameter value is not a valid symmetric
 	// mode.
-	ErrorMode ErrorCode = errorCode1Start + 0x09
+	ErrorMode ErrorCode = ErrorCode(ResponseMode)
 
 	// ErrorType corresponds to TPM_RC_TYPE and is returned as a *TPMParameterError error for any
 	// command that accepts a ObjectTypeId parameter if the parameter value is not a valid public
 	// type.
-	ErrorType ErrorCode = errorCode1Start + 0x0a
+	ErrorType ErrorCode = ErrorCode(ResponseType)
 
-	ErrorHandle ErrorCode = errorCode1Start + 0x0b // TPM_RC_HANDLE
+	ErrorHandle ErrorCode = ErrorCode(ResponseHandle) // TPM_RC_HANDLE
 
 	// ErrorKDF corresponds to TPM_RC_KDF and is returned as a *TPMParameterError error for any
 	// command that accepts a KDFAlgorithmId parameter if the parameter value is not a valid key
 	// derivation function.
-	ErrorKDF ErrorCode = errorCode1Start + 0x0c
+	ErrorKDF ErrorCode = ErrorCode(ResponseKDF)
 
-	ErrorRange ErrorCode = errorCode1Start + 0x0d // TPM_RC_RANGE
+	ErrorRange ErrorCode = ErrorCode(ResponseRange) // TPM_RC_RANGE
 
 	// ErrorAuthFail corresponds to TPM_RC_AUTH_FAIL and is returned as a *TPMSessionError error for
 	// a command if an authorization check fails. The dictionary attack counter is incremented when
 	// this error is returned.
-	ErrorAuthFail ErrorCode = errorCode1Start + 0x0e
+	ErrorAuthFail ErrorCode = ErrorCode(ResponseAuthFail)
 
 	// ErrorNonce corresponds to TPM_RC_NONCE and is returned as a *TPMSessionError error for any
 	// command where a password authorization has been provided and the authorization session in the
 	// command payload contains a non-zero sized nonce field.
-	ErrorNonce ErrorCode = errorCode1Start + 0x0f
+	ErrorNonce ErrorCode = ErrorCode(ResponseNonce)
 
 	// ErrorPP corresponds to TPM_RC_PP and is returned as a *TPMSessionError for a command in the
 	// following circumstances:
@@ -491,11 +501,11 @@ const (
 	//   physical presence that hasn't been provided.
 	// * Authorization is provided with a policy session that includes the TPM2_PolicyPhysicalPresence
 	//   assertion, and an assertion of physical presence hasn't been provided.
-	ErrorPP ErrorCode = errorCode1Start + 0x10
+	ErrorPP ErrorCode = ErrorCode(ResponsePP)
 
 	// ErrorScheme corresponds to TPM_RC_SCHEME and is returned as a *TPMParameterError error for any
 	// command that accepts a SigSchemeId or ECCSchemeId parameter if the parameter value is not valid.
-	ErrorScheme ErrorCode = errorCode1Start + 0x12
+	ErrorScheme ErrorCode = ErrorCode(ResponseScheme)
 
 	// ErrorSize corresponds to TPM_RC_SIZE and is returned for a command in the following circumstances:
 	// * As a *TPMParameterError if the command accepts a parameter type corresponding to TPM2B or
@@ -505,7 +515,7 @@ const (
 	// * As a *TPMError if the size field of the command's authorization area is an invalid value.
 	// * As a *TPMSessionError if the authorization area for a command payload contains more than 3
 	//   sessions.
-	ErrorSize ErrorCode = errorCode1Start + 0x15
+	ErrorSize ErrorCode = ErrorCode(ResponseSize)
 
 	// ErrorSymmetric corresponds to TPM_RC_SYMMETRIC and is returned for a command in the following
 	// circumstances:
@@ -515,24 +525,24 @@ const (
 	//   attribute set but the session has no symmetric algorithm.
 	// * As a *TPMSessionError if a SessionContext instance is provided with the AttrResponseEncrypt
 	//   attribute set but the session has no symmetric algorithm.
-	ErrorSymmetric ErrorCode = errorCode1Start + 0x16
+	ErrorSymmetric ErrorCode = ErrorCode(ResponseSymmetric)
 
 	// ErrorTag corresponds to TPM_RC_TAG and is returned as a *TPMParameterError error for a command
 	// that accepts a StructTag parameter if the parameter value is not the correct value.
-	ErrorTag ErrorCode = errorCode1Start + 0x17
+	ErrorTag ErrorCode = ErrorCode(ResponseTag)
 
 	// ErrorSelector corresponds to TPM_RC_SELECTOR and is returned as a *TPMParameterError error for
 	// a command that accepts a parameter type corresponding to a TPMU prefixed type if the value of
 	// the selector field in the surrounding TPMT prefixed type is incorrect.
-	ErrorSelector ErrorCode = errorCode1Start + 0x18
+	ErrorSelector ErrorCode = ErrorCode(ResponseSelector)
 
 	// ErrorInsufficient corresponds to TPM_RC_INSUFFICIENT and is returned as a *TPMParameterError
 	// for a command if there is insufficient data in the TPM's input buffer to complete unmarshalling
 	// of the command parameters.
-	ErrorInsufficient ErrorCode = errorCode1Start + 0x1a
+	ErrorInsufficient ErrorCode = ErrorCode(ResponseInsufficient)
 
-	ErrorSignature ErrorCode = errorCode1Start + 0x1b // TPM_RC_SIGNATURE
-	ErrorKey       ErrorCode = errorCode1Start + 0x1c // TPM_RC_KEY
+	ErrorSignature ErrorCode = ErrorCode(ResponseSignature) // TPM_RC_SIGNATURE
+	ErrorKey       ErrorCode = ErrorCode(ResponseKey)       // TPM_RC_KEY
 
 	// ErrorPolicyFail corresponds to TPM_RC_POLICY_FAIL and is returned as a *TPMSessionError error
 	// for a command in the following circumstances:
@@ -547,43 +557,59 @@ const (
 	// * A policy session is used for authorization, the policy session includes the
 	//   TPM2_PolicyNvWritten assertion, but the NV index being authorized does not have the
 	//   AttrNVWritten attribute set.
-	ErrorPolicyFail ErrorCode = errorCode1Start + 0x1d
+	ErrorPolicyFail ErrorCode = ErrorCode(ResponsePolicyFail)
 
-	ErrorIntegrity ErrorCode = errorCode1Start + 0x1f // TPM_RC_INTEGRITY
-	ErrorTicket    ErrorCode = errorCode1Start + 0x20 // TPM_RC_TICKET
+	ErrorIntegrity ErrorCode = ErrorCode(ResponseIntegrity) // TPM_RC_INTEGRITY
+	ErrorTicket    ErrorCode = ErrorCode(ResponseTicket)    // TPM_RC_TICKET
 
 	// ErroReservedBits corresponds to TPM_RC_RESERVED_BITS and is returned as a *TPMParameterError
 	// error for a command that accepts a parameter type corresponding to a TPMA prefixed type if the
 	// parameter value has reserved bits set.
-	ErrorReservedBits ErrorCode = errorCode1Start + 0x21
+	ErrorReservedBits ErrorCode = ErrorCode(ResponseReservedBits)
 
 	// ErrorBadAuth corresponds to TPM_RC_BAD_AUTH and is returned as a *TPMSessionError error for a
 	// command if an authorization check fails and the authorized entity is exempt from dictionary
 	// attack protections.
-	ErrorBadAuth ErrorCode = errorCode1Start + 0x22
+	ErrorBadAuth ErrorCode = ErrorCode(ResponseBadAuth)
 
 	// ErrorExpired corresponds to TPM_RC_EXPIRED and is returned as a *TPMSessionError error for a
 	// command if a policy session is used for authorization, and the session has expired.
-	ErrorExpired ErrorCode = errorCode1Start + 0x23
+	ErrorExpired ErrorCode = ErrorCode(ResponseExpired)
 
 	// ErrorPolicyCC corresponds to TPM_RC_POLICY_CC and is returned as a *TPMSessionError error for
 	// a command if a policy session is used for authorization, the session includes a
 	// TPM2_PolicyCommandCode assertion, but the command code doesn't match the command for which the
 	// authorization is being used for.
-	ErrorPolicyCC ErrorCode = errorCode1Start + 0x24
+	ErrorPolicyCC ErrorCode = ErrorCode(ResponsePolicyCC)
 
-	ErrorBinding ErrorCode = errorCode1Start + 0x25 // TPM_RC_BINDING
+	ErrorBinding ErrorCode = ErrorCode(ResponseBinding) // TPM_RC_BINDING
 
 	// ErrorCurve corresponds to TPM_RC_CURVE and is returned as a *TPMParameterError for a command
 	// that accepts a ECCCurve parameter if the parameter value is incorrect.
-	ErrorCurve ErrorCode = errorCode1Start + 0x26
+	ErrorCurve ErrorCode = ErrorCode(ResponseCurve)
 
-	ErrorECCPoint ErrorCode = errorCode1Start + 0x27 // TPM_RC_ECC_POINT
+	ErrorECCPoint ErrorCode = ErrorCode(ResponseECCPoint) // TPM_RC_ECC_POINT
 
-	ErrorFWLimited ErrorCode = errorCode1Start + 0x28 // TPM_RC_FW_LIMITED
+	ErrorFWLimited ErrorCode = ErrorCode(ResponseFWLimited) // TPM_RC_FW_LIMITED
 
-	ErrorSVNLimited ErrorCode = errorCode1Start + 0x29 // TPM_RC_SVN_LIMITED
+	ErrorSVNLimited ErrorCode = ErrorCode(ResponseSVNLimited) // TPM_RC_SVN_LIMITED
 )
+
+// ResponseCode returns a TPM response code for this error code.
+// It will panic if it cannot be converted to a valid response code.
+func (c ErrorCode) ResponseCode() ResponseCode {
+	if c >= errorCode1Start {
+		// Format-one
+		rc := ResponseCode(c)
+		if rc.P() {
+			panic(fmt.Errorf("%w (error code results in a format-1 response code that overflows into bit 6)", InvalidResponseCodeError(rc)))
+		}
+		return rc
+	}
+
+	// Format-zero
+	return rcVer1 + ResponseCode(c)
+}
 
 // TPMErrorBadTag represents a TPM response that indicates that the tag field of the command header
 // was invalid (rc == [ResponseBadTag]). This error will occur when trying to execute a TPM2
@@ -592,6 +618,7 @@ type TPMErrorBadTag struct {
 	Command CommandCode
 }
 
+// CommandCode returns the command code that generated this error.
 func (e *TPMErrorBadTag) CommandCode() CommandCode {
 	return e.Command
 }
@@ -602,40 +629,32 @@ func (TPMErrorBadTag) ResponseCode() ResponseCode {
 }
 
 func (e *TPMErrorBadTag) Error() string {
-	return fmt.Sprintf("TPM returned a TPM_RC_BAD_TAG error whilst executing command %s", e.Command)
+	return fmt.Sprintf("TPM returned an error whilst executing command %s: %+v", e.Command, ResponseBadTag)
 }
 
 // TPMError represents a TPM response that indicates an error that is not associated with a
-// specific handle, parameter or session.
+// specific handle, parameter or session (format-zero errors, 0x100 <= rc <= 0x17f), or as a
+// base for errors that are associated with a specific handle, parameter or session
+// (format-one errors, 0x080 < rc <= 0x0bf).
 type TPMError struct {
 	Command CommandCode // Command code associated with this error
 	Code    ErrorCode   // Error code
 }
 
+// CommandCode returns the command code that generated this error.
 func (e *TPMError) CommandCode() CommandCode {
 	return e.Command
 }
 
-// ResponseCode returns a TPM response code for this error.
-// It will panic if it cannot be converted to a valid error response code.
+// ResponseCode returns a TPM response code for this error. If the error is associated
+// with a format-one response, the returned response code will be the base response code.
+// It will panic if it cannot be converted to a valid response code.
 func (e *TPMError) ResponseCode() ResponseCode {
-	if e.Code >= 0x80 {
-		code := ResponseCode(e.Code - errorCode1Start)
-		if code&responseCodeE1 != code {
-			panic("invalid error code")
-		}
-		return responseCodeF | ResponseCode(e.Code)
-	}
-	return responseCodeV | ResponseCode(e.Code)
+	return e.Code.ResponseCode()
 }
 
-func (e *TPMError) Error() string {
-	var builder bytes.Buffer
-	fmt.Fprintf(&builder, "TPM returned an error whilst executing command %s: %s", e.Command, e.Code)
-	if desc, hasDesc := errorCodeDescriptions[e.Code]; hasDesc {
-		fmt.Fprintf(&builder, " (%s)", desc)
-	}
-	return builder.String()
+func (e *TPMError) Error() (err string) {
+	return fmt.Sprintf("TPM returned an error whilst executing command %s: %+s", e.Command, responseCodeFormatter(e))
 }
 
 func (e *TPMError) Is(target error) bool {
@@ -647,7 +666,7 @@ func (e *TPMError) Is(target error) bool {
 }
 
 // TPMParameterError represents a TPM response that indicates an error that is associated with a
-// command parameter.
+// command parameter (format-one errors 0x080 < rc <= 0x0bf).
 type TPMParameterError struct {
 	*TPMError
 	Index int // Index of the parameter associated with this error in the command parameter area, starting from 1
@@ -656,23 +675,14 @@ type TPMParameterError struct {
 // ResponseCode returns a TPM response code for this error.
 // It will panic if it cannot be converted to a valid parameter error response code.
 func (e *TPMParameterError) ResponseCode() ResponseCode {
-	code := e.TPMError.ResponseCode()
-	if !code.F() {
-		panic("invalid error code")
+	if e.Index < 0 || e.Index > math.MaxUint8 {
+		panic("parameter index out of range")
 	}
-	if e.Index < 0 || e.Index > maxResponseCodeParameterIndex {
-		panic("invalid index")
-	}
-	return (ResponseCode(e.Index) << responseCodeIndexShift) | responseCodeP | code
+	return e.TPMError.ResponseCode().SetParameterIndex(uint8(e.Index))
 }
 
 func (e *TPMParameterError) Error() string {
-	var builder bytes.Buffer
-	fmt.Fprintf(&builder, "TPM returned an error for parameter %d whilst executing command %s: %s", e.Index, e.Command, e.Code)
-	if desc, hasDesc := errorCodeDescriptions[e.Code]; hasDesc {
-		fmt.Fprintf(&builder, " (%s)", desc)
-	}
-	return builder.String()
+	return fmt.Sprintf("TPM returned an error for parameter %d whilst executing command %s: %+s", e.Index, e.Command, responseCodeFormatter(e))
 }
 
 func (e *TPMParameterError) Is(target error) bool {
@@ -688,38 +698,23 @@ func (e *TPMParameterError) Unwrap() error {
 }
 
 // TPMSessionError represents a TPM response that indicates an error that is associated with a
-// session.
+// session (format-one errors 0x080 < rc <= 0x0bf).
 type TPMSessionError struct {
 	*TPMError
 	Index int // Index of the session associated with this error in the authorization area, starting from 1
 }
 
-const (
-	maxResponseCodeHandleIndex          = 7
-	maxResponseCodeParameterIndex       = 15
-	responseCodeIndexIsSession    uint8 = 0x8
-)
-
 // ResponseCode returns a TPM response code for this error.
 // It will panic if it cannot be converted to a valid session error response code.
 func (e *TPMSessionError) ResponseCode() ResponseCode {
-	code := e.TPMError.ResponseCode()
-	if !code.F() {
-		panic("invalid error code")
+	if e.Index < 0 || e.Index > math.MaxUint8 {
+		panic("session index out of range")
 	}
-	if e.Index < 0 || e.Index > maxResponseCodeHandleIndex {
-		panic("invalid index")
-	}
-	return (ResponseCode(responseCodeIndexIsSession|uint8(e.Index)) << responseCodeIndexShift) | code
+	return e.TPMError.ResponseCode().SetSessionIndex(uint8(e.Index))
 }
 
 func (e *TPMSessionError) Error() string {
-	var builder bytes.Buffer
-	fmt.Fprintf(&builder, "TPM returned an error for session %d whilst executing command %s: %s", e.Index, e.Command, e.Code)
-	if desc, hasDesc := errorCodeDescriptions[e.Code]; hasDesc {
-		fmt.Fprintf(&builder, " (%s)", desc)
-	}
-	return builder.String()
+	return fmt.Sprintf("TPM returned an error for session %d whilst executing command %s: %+s", e.Index, e.Command, responseCodeFormatter(e))
 }
 
 func (e *TPMSessionError) Is(target error) bool {
@@ -735,7 +730,7 @@ func (e *TPMSessionError) Unwrap() error {
 }
 
 // TPMHandleError represents a TPM response that indicates an error that is associated with a
-// command handle.
+// command handle (format-one errors 0x080 < rc <= 0x0bf).
 type TPMHandleError struct {
 	*TPMError
 	// Index is the index of the handle associated with this error in the command handle area, starting from 1. An index of 0 corresponds
@@ -746,23 +741,14 @@ type TPMHandleError struct {
 // ResponseCode returns a TPM response code for this error.
 // It will panic if it cannot be converted to a valid handle error response code.
 func (e *TPMHandleError) ResponseCode() ResponseCode {
-	code := e.TPMError.ResponseCode()
-	if !code.F() {
-		panic("invalid error code")
+	if e.Index < 0 || e.Index > math.MaxUint8 {
+		panic("handle index out of range")
 	}
-	if e.Index < 0 || e.Index > maxResponseCodeHandleIndex {
-		panic("invalid index")
-	}
-	return (ResponseCode(e.Index) << responseCodeIndexShift) | code
+	return e.TPMError.ResponseCode().SetHandleIndex(uint8(e.Index))
 }
 
 func (e *TPMHandleError) Error() string {
-	var builder bytes.Buffer
-	fmt.Fprintf(&builder, "TPM returned an error for handle %d whilst executing command %s: %s", e.Index, e.Command, e.Code)
-	if desc, hasDesc := errorCodeDescriptions[e.Code]; hasDesc {
-		fmt.Fprintf(&builder, " (%s)", desc)
-	}
-	return builder.String()
+	return fmt.Sprintf("TPM returned an error for handle %d whilst executing command %s: %+s", e.Index, e.Command, responseCodeFormatter(e))
 }
 
 func (e *TPMHandleError) Is(target error) bool {
@@ -912,7 +898,7 @@ func AsTPMVendorError(err error, rc ResponseCode, command CommandCode) *TPMVendo
 type InvalidResponseCodeError ResponseCode
 
 func (e InvalidResponseCodeError) Error() string {
-	return fmt.Sprintf("invalid response code 0x%08x", ResponseCode(e))
+	return fmt.Sprintf("invalid response code %#08x", ResponseCode(e))
 }
 
 // DecodeResponseCode decodes the ResponseCode provided via resp. If the specified response code is
@@ -936,9 +922,9 @@ func DecodeResponseCode(command CommandCode, resp ResponseCode) error {
 				return InvalidResponseCodeError(resp)
 			}
 			return &TPMParameterError{TPMError: err, Index: int(resp.N())}
-		case resp.N()&responseCodeIndexIsSession != 0:
+		case resp.N()&uint8(ResponseS>>rcNShift) != 0:
 			// Associated with a session
-			index := resp.N() &^ responseCodeIndexIsSession
+			index := resp.N() &^ uint8(ResponseS>>rcNShift)
 			if index == 0 {
 				return InvalidResponseCodeError(resp)
 			}
