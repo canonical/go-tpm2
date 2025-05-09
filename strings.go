@@ -5,27 +5,8 @@
 package tpm2
 
 import (
-	"bytes"
 	"fmt"
 )
-
-func makeDefaultFormatter(s fmt.State, f rune) string {
-	var builder bytes.Buffer
-	builder.WriteString("%")
-	for _, flag := range [...]int{'+', '-', '#', ' ', '0'} {
-		if s.Flag(flag) {
-			fmt.Fprintf(&builder, "%c", flag)
-		}
-	}
-	if width, ok := s.Width(); ok {
-		fmt.Fprintf(&builder, "%d", width)
-	}
-	if prec, ok := s.Precision(); ok {
-		fmt.Fprintf(&builder, ".%d", prec)
-	}
-	builder.WriteRune(f)
-	return builder.String()
-}
 
 func (m TPMManufacturer) String() string {
 	switch m {
@@ -72,7 +53,7 @@ func (m TPMManufacturer) String() string {
 	case TPMManufacturerGOOG:
 		return "Google"
 	default:
-		return fmt.Sprintf("0x%08x", uint32(m))
+		return fmt.Sprintf("%#08x", uint32(m))
 	}
 }
 
@@ -81,7 +62,7 @@ func (m TPMManufacturer) Format(s fmt.State, f rune) {
 	case 's', 'v':
 		fmt.Fprintf(s, "%s", m.String())
 	default:
-		fmt.Fprintf(s, makeDefaultFormatter(s, f), uint32(m))
+		fmt.Fprintf(s, formatString(s, f), uint32(m))
 	}
 }
 
@@ -282,7 +263,7 @@ func (c CommandCode) String() string {
 	case CommandPolicyAuthorizeNV:
 		return "TPM_CC_PolicyAuthorizeNV"
 	default:
-		return fmt.Sprintf("0x%08x", uint32(c))
+		return fmt.Sprintf("%#08x", uint32(c))
 	}
 }
 
@@ -291,7 +272,7 @@ func (c CommandCode) Format(s fmt.State, f rune) {
 	case 's', 'v':
 		fmt.Fprintf(s, "%s", c.String())
 	default:
-		fmt.Fprintf(s, makeDefaultFormatter(s, f), uint32(c))
+		fmt.Fprintf(s, formatString(s, f), uint32(c))
 	}
 }
 
@@ -546,7 +527,7 @@ func (rc ResponseCode) Format(s fmt.State, f rune) {
 			}
 		}
 	default:
-		fmt.Fprintf(s, makeDefaultFormatter(s, f), uint32(rc))
+		fmt.Fprintf(s, formatString(s, f), uint32(rc))
 	}
 }
 
@@ -633,7 +614,7 @@ func (h Handle) String() string {
 	case HandleSVNNullBase:
 		return "TPM_RH_SVN_NULL_BASE"
 	default:
-		return fmt.Sprintf("0x%08x", uint32(h))
+		return fmt.Sprintf("%#08x", uint32(h))
 	}
 }
 
@@ -642,7 +623,7 @@ func (h Handle) Format(s fmt.State, f rune) {
 	case 's', 'v':
 		fmt.Fprintf(s, "%s", h.String())
 	default:
-		fmt.Fprintf(s, makeDefaultFormatter(s, f), uint32(h))
+		fmt.Fprintf(s, formatString(s, f), uint32(h))
 	}
 }
 
@@ -767,7 +748,7 @@ func (a AlgorithmId) String() string {
 	case AlgorithmKMAC256:
 		return "TPM_ALG_KMAC256"
 	default:
-		return fmt.Sprintf("0x%04x", uint16(a))
+		return fmt.Sprintf("%#04x", uint16(a))
 	}
 }
 
@@ -776,7 +757,7 @@ func (a AlgorithmId) Format(s fmt.State, f rune) {
 	case 's', 'v':
 		fmt.Fprintf(s, "%s", a.String())
 	default:
-		fmt.Fprintf(s, makeDefaultFormatter(s, f), uint16(a))
+		fmt.Fprintf(s, formatString(s, f), uint16(a))
 	}
 }
 
@@ -847,7 +828,7 @@ func (c Capability) String() string {
 	case CapabilityAuthPolicies:
 		return "TPM_CAP_AUTH_POLICIES"
 	default:
-		return fmt.Sprintf("0x%08x", uint32(c))
+		return fmt.Sprintf("%#08x", uint32(c))
 	}
 }
 
@@ -856,7 +837,7 @@ func (c Capability) Format(s fmt.State, f rune) {
 	case 's', 'v':
 		fmt.Fprintf(s, "%s", c.String())
 	default:
-		fmt.Fprintf(s, makeDefaultFormatter(s, f), uint32(c))
+		fmt.Fprintf(s, formatString(s, f), uint32(c))
 	}
 }
 
@@ -887,7 +868,7 @@ func (o ArithmeticOp) String() string {
 	case OpBitclear:
 		return "TPM_EO_BITCLEAR"
 	default:
-		return fmt.Sprintf("0x%08x", uint16(o))
+		return fmt.Sprintf("%#08x", uint16(o))
 	}
 }
 
@@ -896,7 +877,7 @@ func (o ArithmeticOp) Format(s fmt.State, f rune) {
 	case 's', 'v':
 		fmt.Fprintf(s, "%s", o.String())
 	default:
-		fmt.Fprintf(s, makeDefaultFormatter(s, f), uint16(o))
+		fmt.Fprintf(s, formatString(s, f), uint16(o))
 	}
 }
 

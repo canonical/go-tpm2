@@ -21,6 +21,7 @@ type SessionParam = sessionParam
 type SessionParams = sessionParams
 
 var ComputeBindName = computeBindName
+var FormatString = formatString
 var NewExtraSessionParam = newExtraSessionParam
 var NewSessionParamForAuth = newSessionParamForAuth
 var NewSessionParams = newSessionParams
