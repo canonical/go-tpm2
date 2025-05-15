@@ -6,8 +6,601 @@ package tpm2
 
 import (
 	"fmt"
+	"strings"
 )
 
+type stringerFormatter interface {
+	fmt.Stringer
+	fmt.Formatter
+}
+
+type removeFormatterImpl[T stringerFormatter] struct {
+	stringer T
+}
+
+func (r removeFormatterImpl[S]) String() string {
+	return r.stringer.String()
+}
+
+func removeFormatter[T stringerFormatter](val T) fmt.Stringer {
+	return removeFormatterImpl[T]{stringer: val}
+}
+
+// String implements [fmt.Stringer].
+func (a AlgorithmAttributes) String() string {
+	if a == 0 {
+		return "<empty>"
+	}
+
+	var (
+		flags    []string
+		reserved AlgorithmAttributes
+		current  AlgorithmAttributes
+	)
+
+	for current = 1; current != 0; current <<= 1 {
+		if a&current == 0 {
+			continue
+		}
+
+		switch current {
+		case AttrAsymmetric:
+			flags = append(flags, "asymmetric")
+		case AttrSymmetric:
+			flags = append(flags, "symmetric")
+		case AttrHash:
+			flags = append(flags, "hash")
+		case AttrObject:
+			flags = append(flags, "object")
+		case AttrSigning:
+			flags = append(flags, "signing")
+		case AttrEncrypting:
+			flags = append(flags, "encrypting")
+		case AttrMethod:
+			flags = append(flags, "method")
+		default:
+			reserved |= current
+		}
+
+		current <<= 1
+		if current == 0 {
+			break
+		}
+	}
+
+	if reserved != 0 {
+		flags = append(flags, fmt.Sprintf("<reserved:%#08x>", reserved))
+	}
+	return strings.Join(flags, " | ")
+}
+
+// Format implements [fmt.Formatter]. It prints the return of the [fmt.Stringer]
+// implementation only for the 's', 'v' and 'q' verbs. The 'x' and 'X' verbs will
+// print the hexadecimal representation of the underlying value rather than the
+// representation of the string.
+func (a AlgorithmAttributes) Format(s fmt.State, f rune) {
+	switch f {
+	case 's', 'v', 'q':
+		fmt.Fprintf(s, formatString(s, f), removeFormatter(a))
+	default:
+		fmt.Fprintf(s, formatString(s, f), uint32(a))
+	}
+}
+
+// String implements [fmt.Stringer].
+func (a ObjectAttributes) String() string {
+	if a == 0 {
+		return "<empty>"
+	}
+
+	var (
+		flags    []string
+		reserved ObjectAttributes
+		current  ObjectAttributes
+	)
+
+	for current = 1; current != 0; current <<= 1 {
+		if a&current == 0 {
+			continue
+		}
+
+		switch current {
+		case AttrFixedTPM:
+			flags = append(flags, "fixedTPM")
+		case AttrStClear:
+			flags = append(flags, "stClear")
+		case AttrFixedParent:
+			flags = append(flags, "fixedParent")
+		case AttrSensitiveDataOrigin:
+			flags = append(flags, "sensitiveDataOrigin")
+		case AttrUserWithAuth:
+			flags = append(flags, "userWithAuth")
+		case AttrAdminWithPolicy:
+			flags = append(flags, "adminWithPolicy")
+		case AttrNoDA:
+			flags = append(flags, "noDA")
+		case AttrEncryptedDuplication:
+			flags = append(flags, "encryptedDuplication")
+		case AttrRestricted:
+			flags = append(flags, "restricted")
+		case AttrDecrypt:
+			flags = append(flags, "decrypt")
+		case AttrSign:
+			flags = append(flags, "sign")
+		default:
+			reserved |= current
+		}
+	}
+
+	if reserved != 0 {
+		flags = append(flags, fmt.Sprintf("<reserved:%#08x>", reserved))
+	}
+	return strings.Join(flags, " | ")
+}
+
+// Format implements [fmt.Formatter]. It prints the return of the [fmt.Stringer]
+// implementation only for the 's', 'v' and 'q' verbs. The 'x' and 'X' verbs will
+// print the hexadecimal representation of the underlying value rather than the
+// representation of the string.
+func (a ObjectAttributes) Format(s fmt.State, f rune) {
+	switch f {
+	case 's', 'v', 'q':
+		fmt.Fprintf(s, formatString(s, f), removeFormatter(a))
+	default:
+		fmt.Fprintf(s, formatString(s, f), uint32(a))
+	}
+}
+
+// String implements [fmt.Stringer].
+func (l Locality) String() string {
+	if l == 0 {
+		return "<empty>"
+	}
+	if l.IsExtended() {
+		return fmt.Sprintf("%#02x", uint8(l))
+	}
+
+	var (
+		flags   []string
+		current Locality
+	)
+	for current = 1; current <= 1<<5; current <<= 1 {
+		if l&current == 0 {
+			continue
+		}
+
+		switch l {
+		case LocalityZero:
+			flags = append(flags, "TPM_LOC_ZERO")
+		case LocalityOne:
+			flags = append(flags, "TPM_LOC_ONE")
+		case LocalityTwo:
+			flags = append(flags, "TPM_LOC_TWO")
+		case LocalityThree:
+			flags = append(flags, "TPM_LOC_THREE")
+		case LocalityFour:
+			flags = append(flags, "TPM_LOC_FOUR")
+		}
+	}
+
+	return strings.Join(flags, " | ")
+}
+
+// Format implements [fmt.Formatter]. It prints the return of the [fmt.Stringer]
+// implementation only for the 's', 'v' and 'q' verbs. The 'x' and 'X' verbs will
+// print the hexadecimal representation of the underlying value rather than the
+// representation of the string.
+func (l Locality) Format(s fmt.State, f rune) {
+	switch f {
+	case 's', 'v', 'q':
+		fmt.Fprintf(s, formatString(s, f), removeFormatter(l))
+	default:
+		fmt.Fprintf(s, formatString(s, f), uint8(l))
+	}
+}
+
+// String implements [fmt.Stringer].
+func (a PermanentAttributes) String() string {
+	if a == 0 {
+		return "<empty>"
+	}
+
+	var (
+		flags    []string
+		reserved PermanentAttributes
+		current  PermanentAttributes
+	)
+
+	for current = 1; current != 0; current <<= 1 {
+		if a&current == 0 {
+			continue
+		}
+
+		switch current {
+		case AttrOwnerAuthSet:
+			flags = append(flags, "ownerAuthSet")
+		case AttrEndorsementAuthSet:
+			flags = append(flags, "endorsementAuthSet")
+		case AttrLockoutAuthSet:
+			flags = append(flags, "lockoutAuthSet")
+		case AttrDisableClear:
+			flags = append(flags, "disableClear")
+		case AttrInLockout:
+			flags = append(flags, "inLockout")
+		case AttrTPMGeneratedEPS:
+			flags = append(flags, "tpmGeneratedEPS")
+		default:
+			reserved |= current
+		}
+	}
+
+	if reserved != 0 {
+		flags = append(flags, fmt.Sprintf("<reserved:%#08x>", reserved))
+	}
+	return strings.Join(flags, " | ")
+}
+
+// Format implements [fmt.Formatter]. It prints the return of the [fmt.Stringer]
+// implementation only for the 's', 'v' and 'q' verbs. The 'x' and 'X' verbs will
+// print the hexadecimal representation of the underlying value rather than the
+// representation of the string.
+func (a PermanentAttributes) Format(s fmt.State, f rune) {
+	switch f {
+	case 's', 'v', 'q':
+		fmt.Fprintf(s, formatString(s, f), removeFormatter(a))
+	default:
+		fmt.Fprintf(s, formatString(s, f), uint32(a))
+	}
+}
+
+// String implements [fmt.Stringer].
+func (a StartupClearAttributes) String() string {
+	if a == 0 {
+		return "<empty>"
+	}
+
+	var (
+		flags    []string
+		reserved StartupClearAttributes
+		current  StartupClearAttributes
+	)
+
+	for current = 1; current != 0; current <<= 1 {
+		if a&current == 0 {
+			continue
+		}
+
+		switch current {
+		case AttrPhEnable:
+			flags = append(flags, "phEnable")
+		case AttrShEnable:
+			flags = append(flags, "shEnable")
+		case AttrEhEnable:
+			flags = append(flags, "ehEnable")
+		case AttrPhEnableNV:
+			flags = append(flags, "phEnableNV")
+		case AttrOrderly:
+			flags = append(flags, "orderly")
+		default:
+			reserved |= current
+		}
+	}
+
+	if reserved != 0 {
+		flags = append(flags, fmt.Sprintf("<reserved:%#08x>", reserved))
+	}
+	return strings.Join(flags, " | ")
+}
+
+// Format implements [fmt.Formatter]. It prints the return of the [fmt.Stringer]
+// implementation only for the 's', 'v' and 'q' verbs. The 'x' and 'X' verbs will
+// print the hexadecimal representation of the underlying value rather than the
+// representation of the string.
+func (a StartupClearAttributes) Format(s fmt.State, f rune) {
+	switch f {
+	case 's', 'v', 'q':
+		fmt.Fprintf(s, formatString(s, f), removeFormatter(a))
+	default:
+		fmt.Fprintf(s, formatString(s, f), uint32(a))
+	}
+}
+
+// String implements [fmt.Stringer].
+func (a MemoryAttributes) String() string {
+	if a == 0 {
+		return "<empty>"
+	}
+
+	var (
+		flags    []string
+		reserved MemoryAttributes
+		current  MemoryAttributes
+	)
+
+	for current = 1; current != 0; current <<= 1 {
+		if a&current == 0 {
+			continue
+		}
+
+		switch current {
+		case AttrSharedRAM:
+			flags = append(flags, "sharedRAM")
+		case AttrSharedNV:
+			flags = append(flags, "sharedNV")
+		case AttrObjectCopiedToRAM:
+			flags = append(flags, "objectCopiedToRam")
+		}
+	}
+
+	if reserved != 0 {
+		flags = append(flags, fmt.Sprintf("<reserved:%#08x>", reserved))
+	}
+	return strings.Join(flags, " | ")
+}
+
+// Format implements [fmt.Formatter]. It prints the return of the [fmt.Stringer]
+// implementation only for the 's', 'v' and 'q' verbs. The 'x' and 'X' verbs will
+// print the hexadecimal representation of the underlying value rather than the
+// representation of the string.
+func (a MemoryAttributes) Format(s fmt.State, f rune) {
+	switch f {
+	case 's', 'v', 'q':
+		fmt.Fprintf(s, formatString(s, f), removeFormatter(a))
+	default:
+		fmt.Fprintf(s, formatString(s, f), uint32(a))
+	}
+}
+
+// String implements [fmt.Stringer].
+func (a CommandAttributes) String() string {
+	var (
+		flags    []string
+		reserved CommandAttributes
+		current  CommandAttributes
+		cHandles uint8
+	)
+
+	flags = append(flags, fmt.Sprintf("commandIndex:%#04x", a&0xffff))
+
+	for current = AttrNV; current != 0; current <<= 1 {
+		if current&AttrCHandles != 0 {
+			cHandles |= uint8(current >> attrCHandlesShift)
+			if (current<<1)&AttrCHandles == 0 {
+				flags = append(flags, fmt.Sprintf("cHandles:%d", cHandles))
+			}
+			continue
+		}
+
+		if a&current == 0 {
+			continue
+		}
+
+		switch current {
+		case AttrNV:
+			flags = append(flags, "nv")
+		case AttrExtensive:
+			flags = append(flags, "extensive")
+		case AttrFlushed:
+			flags = append(flags, "flushed")
+		case AttrRHandle:
+			flags = append(flags, "rHandle")
+		case AttrV:
+			flags = append(flags, "v")
+		default:
+			reserved |= current
+		}
+	}
+
+	if reserved != 0 {
+		flags = append(flags, fmt.Sprintf("<reserved:%#08x>", reserved))
+	}
+	return strings.Join(flags, " | ")
+}
+
+// Format implements [fmt.Formatter]. It prints the return of the [fmt.Stringer]
+// implementation only for the 's', 'v' and 'q' verbs. The 'x' and 'X' verbs will
+// print the hexadecimal representation of the underlying value rather than the
+// representation of the string.
+func (a CommandAttributes) Format(s fmt.State, f rune) {
+	switch f {
+	case 's', 'v', 'q':
+		fmt.Fprintf(s, formatString(s, f), removeFormatter(a))
+	default:
+		fmt.Fprintf(s, formatString(s, f), uint32(a))
+	}
+}
+
+func (a FIPS140_3_Indicator) String() string {
+	switch a {
+	case FIPS140_3_NonSecurityService:
+		return "non security service"
+	case FIPS140_3_ApprovedSecurityService:
+		return "approved security service"
+	case FIPS140_3_NonApprovedSecurityService:
+		return "non-approved security service"
+	default:
+		return fmt.Sprintf("%#02x", a)
+	}
+}
+
+// String implements [fmt.Stringer].
+func (a ModeAttributes) String() string {
+	if a == 0 {
+		return "<empty>"
+	}
+
+	var (
+		flags               []string
+		reserved            ModeAttributes
+		current             ModeAttributes
+		fips140_3_Indicator ModeAttributes
+	)
+
+	for current = 1; current != 0; current <<= 1 {
+		if current&ModeFIPS140_3_Indicator != 0 {
+			fips140_3_Indicator |= current
+			if (current<<1)&ModeFIPS140_3_Indicator == 0 {
+				flags = append(flags, fmt.Sprintf("FIPS_140_3_INDICATOR:%s", fips140_3_Indicator.FIPS140_3_Indicator()))
+			}
+			continue
+		}
+
+		if a&current == 0 {
+			continue
+		}
+
+		switch current {
+		case ModeFIPS140_2:
+			flags = append(flags, "FIPS_140_2")
+		case ModeFIPS140_3:
+			flags = append(flags, "FIPS_140_3")
+		default:
+			reserved |= current
+		}
+	}
+
+	if reserved != 0 {
+		flags = append(flags, fmt.Sprintf("<reserved:%#08x>", reserved))
+	}
+	return strings.Join(flags, " | ")
+}
+
+// Format implements [fmt.Formatter]. It prints the return of the [fmt.Stringer]
+// implementation only for the 's', 'v' and 'q' verbs. The 'x' and 'X' verbs will
+// print the hexadecimal representation of the underlying value rather than the
+// representation of the string.
+func (a ModeAttributes) Format(s fmt.State, f rune) {
+	switch f {
+	case 's', 'v', 'q':
+		fmt.Fprintf(s, formatString(s, f), removeFormatter(a))
+	default:
+		fmt.Fprintf(s, formatString(s, f), uint32(a))
+	}
+}
+
+// String implements [fmt.Stringer].
+func (t NVType) String() string {
+	switch t {
+	case NVTypeOrdinary:
+		return "TPM_NT_ORDINARY"
+	case NVTypeCounter:
+		return "TPM_NT_COUNTER"
+	case NVTypeBits:
+		return "TPM_NT_BITS"
+	case NVTypeExtend:
+		return "TPM_NT_EXTEND"
+	case NVTypePinFail:
+		return "TPM_NT_PIN_FAIL"
+	case NVTypePinPass:
+		return "TPM_NT_PIN_PASS"
+	default:
+		return fmt.Sprintf("%#08x", t)
+	}
+}
+
+// Format implements [fmt.Formatter]. It prints the return of the [fmt.Stringer]
+// implementation only for the 's', 'v' and 'q' verbs. The 'x' and 'X' verbs will
+// print the hexadecimal representation of the underlying value rather than the
+// representation of the string.
+func (t NVType) Format(s fmt.State, f rune) {
+	switch f {
+	case 's', 'v', 'q':
+		fmt.Fprintf(s, formatString(s, f), removeFormatter(t))
+	default:
+		fmt.Fprintf(s, formatString(s, f), uint32(t))
+	}
+}
+
+// String implements [fmt.Stringer].
+func (a NVAttributes) String() string {
+	var (
+		flags    []string
+		reserved NVAttributes
+		current  NVAttributes
+		nvType   NVType
+	)
+
+	for current = 1; current != 0; current <<= 1 {
+		if current&attrNVType != 0 {
+			nvType |= NVType(current >> attrNVTypeShift)
+			if (current<<1)&attrNVType == 0 {
+				flags = append(flags, fmt.Sprintf("TPM_NT:%s", nvType))
+			}
+			continue
+		}
+
+		if a&current == 0 {
+			continue
+		}
+
+		switch current {
+		case AttrNVPPWrite:
+			flags = append(flags, "TPMA_NV_PPWRITE")
+		case AttrNVOwnerWrite:
+			flags = append(flags, "TPMA_NV_OWNERWRITE")
+		case AttrNVAuthWrite:
+			flags = append(flags, "TPMA_NV_AUTHWRITE")
+		case AttrNVPolicyWrite:
+			flags = append(flags, "TPMA_NV_POLICYWRITE")
+		case AttrNVPolicyDelete:
+			flags = append(flags, "TPMA_NV_POLICYDELETE")
+		case AttrNVWriteLocked:
+			flags = append(flags, "TPMA_NV_WRITELOCKED")
+		case AttrNVWriteAll:
+			flags = append(flags, "TPMA_NV_WRITEALL")
+		case AttrNVWriteDefine:
+			flags = append(flags, "TPMA_NV_WRITEDEFINE")
+		case AttrNVWriteStClear:
+			flags = append(flags, "TPMA_NV_WRITE_STCLEAR")
+		case AttrNVGlobalLock:
+			flags = append(flags, "TPMA_NV_GLOBALLOCK")
+		case AttrNVPPRead:
+			flags = append(flags, "TPMA_NV_PPREAD")
+		case AttrNVOwnerRead:
+			flags = append(flags, "TPMA_NV_OWNERREAD")
+		case AttrNVAuthRead:
+			flags = append(flags, "TPMA_NV_AUTHREAD")
+		case AttrNVPolicyRead:
+			flags = append(flags, "TPMA_NV_POLICYREAD")
+		case AttrNVNoDA:
+			flags = append(flags, "TPMA_NV_NO_DA")
+		case AttrNVOrderly:
+			flags = append(flags, "TPMA_NV_ORDERLY")
+		case AttrNVClearStClear:
+			flags = append(flags, "TPMA_NV_CLEAR_STCLEAR")
+		case AttrNVReadLocked:
+			flags = append(flags, "TPMA_NV_READLOCKED")
+		case AttrNVWritten:
+			flags = append(flags, "TPMA_NV_WRITTEN")
+		case AttrNVPlatformCreate:
+			flags = append(flags, "TPMA_NV_PLATFORMCREATE")
+		case AttrNVReadStClear:
+			flags = append(flags, "TPMA_NV_READ_STCLEAR")
+		default:
+			reserved |= current
+		}
+	}
+
+	if reserved != 0 {
+		flags = append(flags, fmt.Sprintf("<reserved:%#08x>", reserved))
+	}
+	return strings.Join(flags, " | ")
+}
+
+// Format implements [fmt.Formatter]. It prints the return of the [fmt.Stringer]
+// implementation only for the 's', 'v' and 'q' verbs. The 'x' and 'X' verbs will
+// print the hexadecimal representation of the underlying value rather than the
+// representation of the string.
+func (a NVAttributes) Format(s fmt.State, f rune) {
+	switch f {
+	case 's', 'v', 'q':
+		fmt.Fprintf(s, formatString(s, f), removeFormatter(a))
+	default:
+		fmt.Fprintf(s, formatString(s, f), uint32(a))
+	}
+}
+
+// String implements [fmt.Stringer].
 func (m TPMManufacturer) String() string {
 	switch m {
 	case TPMManufacturerAMD:
@@ -57,15 +650,20 @@ func (m TPMManufacturer) String() string {
 	}
 }
 
+// Format implements [fmt.Formatter]. It prints the return of the [fmt.Stringer]
+// implementation only for the 's', 'v' and 'q' verbs. The 'x' and 'X' verbs will
+// print the hexadecimal representation of the underlying value rather than the
+// representation of the string.
 func (m TPMManufacturer) Format(s fmt.State, f rune) {
 	switch f {
-	case 's', 'v':
-		fmt.Fprintf(s, "%s", m.String())
+	case 's', 'v', 'q':
+		fmt.Fprintf(s, formatString(s, f), removeFormatter(m))
 	default:
 		fmt.Fprintf(s, formatString(s, f), uint32(m))
 	}
 }
 
+// String implements [fmt.Stringer].
 func (c CommandCode) String() string {
 	switch c {
 	case CommandNVUndefineSpaceSpecial:
@@ -267,10 +865,14 @@ func (c CommandCode) String() string {
 	}
 }
 
+// Format implements [fmt.Formatter]. It prints the return of the [fmt.Stringer]
+// implementation only for the 's', 'v' and 'q' verbs. The 'x' and 'X' verbs will
+// print the hexadecimal representation of the underlying value rather than the
+// representation of the string.
 func (c CommandCode) Format(s fmt.State, f rune) {
 	switch f {
-	case 's', 'v':
-		fmt.Fprintf(s, "%s", c.String())
+	case 's', 'v', 'q':
+		fmt.Fprintf(s, formatString(s, f), removeFormatter(c))
 	default:
 		fmt.Fprintf(s, formatString(s, f), uint32(c))
 	}
@@ -514,13 +1116,18 @@ func (rc ResponseCode) String() string {
 	}
 }
 
-// Format implements [fmt.Formatter]. The '+' flag for the 's' or 'v' verb will
-// append a description of the response code if one exists.
+// Format implements [fmt.Formatter]. It prints the return of the [fmt.Stringer]
+// implementation only for the 's', 'v' and 'q' verbs. The 'x' and 'X' verbs will
+// print the hexadecimal representation of the underlying value rather than the
+// representation of the string.
+//
+// The '+' flag when used with the 's' or 'v' verb will include a description of
+// the response code if one exists.
 func (rc ResponseCode) Format(s fmt.State, f rune) {
 	switch f {
-	case 's', 'v':
-		fmt.Fprintf(s, "%s", rc.String())
-		if s.Flag('+') {
+	case 's', 'v', 'q':
+		fmt.Fprintf(s, formatString(s, f), removeFormatter(rc))
+		if (f == 's' || f == 'q') && s.Flag('+') {
 			desc, hasDesc := rcDescriptions[rc.Base()]
 			if hasDesc {
 				fmt.Fprintf(s, " (%s)", desc)
@@ -558,7 +1165,10 @@ func (e ErrorCode) String() string {
 	return responseCodeFormatter(e).String()
 }
 
-// Format implements [fmt.Formatter].
+// Format implements [fmt.Formatter]. It prints the return of the [fmt.Stringer]
+// implementation only for the 's', 'v' and 'q' verbs. The 'x' and 'X' verbs will
+// print the hexadecimal representation of the underlying value rather than the
+// representation of the string.
 func (e ErrorCode) Format(s fmt.State, f rune) {
 	// An invalid error code may generate a panic, but this is caught
 	// by the fmt package.
@@ -572,13 +1182,17 @@ func (e WarningCode) String() string {
 	return responseCodeFormatter(e).String()
 }
 
-// Format implements [fmt.Formatter].
+// Format implements [fmt.Formatter]. It prints the return of the [fmt.Stringer]
+// implementation only for the 's', 'v' and 'q' verbs. The 'x' and 'X' verbs will
+// print the hexadecimal representation of the underlying value rather than the
+// representation of the string.
 func (e WarningCode) Format(s fmt.State, f rune) {
 	// An invalid warning code may generate a panic, but this is caught
 	// by the fmt package.
 	responseCodeFormatter(e).Format(s, f)
 }
 
+// String implements [fmt.Stringer].
 func (h Handle) String() string {
 	switch h {
 	case HandleOwner:
@@ -618,15 +1232,55 @@ func (h Handle) String() string {
 	}
 }
 
+// Format implements [fmt.Formatter]. It prints the return of the [fmt.Stringer]
+// implementation only for the 's', 'v' and 'q' verbs. The 'x' and 'X' verbs will
+// print the hexadecimal representation of the underlying value rather than the
+// representation of the string.
 func (h Handle) Format(s fmt.State, f rune) {
 	switch f {
-	case 's', 'v':
-		fmt.Fprintf(s, "%s", h.String())
+	case 's', 'v', 'q':
+		fmt.Fprintf(s, formatString(s, f), removeFormatter(h))
 	default:
 		fmt.Fprintf(s, formatString(s, f), uint32(h))
 	}
 }
 
+// String implements [fmt.Stringer].
+func (t HandleType) String() string {
+	switch t {
+	case HandleTypePCR:
+		return "TPM_HT_PCR"
+	case HandleTypeNVIndex:
+		return "TPM_HT_NVINDEX"
+	case HandleTypeHMACSession:
+		return "TPM_HT_HMAC_SESSION"
+	case HandleTypePolicySession:
+		return "TPM_HT_POLICY_SESSION"
+	case HandleTypePermanent:
+		return "TPM_HT_PERMANENT"
+	case HandleTypeTransient:
+		return "TPM_HT_TRANSIENT"
+	case HandleTypePersistent:
+		return "TPM_HT_PERSISTENT"
+	default:
+		return fmt.Sprintf("%#02x", uint8(t))
+	}
+}
+
+// Format implements [fmt.Formatter]. It prints the return of the [fmt.Stringer]
+// implementation only for the 's', 'v' and 'q' verbs. The 'x' and 'X' verbs will
+// print the hexadecimal representation of the underlying value rather than the
+// representation of the string.
+func (t HandleType) Format(s fmt.State, f rune) {
+	switch f {
+	case 's', 'v', 'q':
+		fmt.Fprintf(s, formatString(s, f), removeFormatter(t))
+	default:
+		fmt.Fprintf(s, formatString(s, f), uint8(t))
+	}
+}
+
+// String implements [fmt.Stringer].
 func (a AlgorithmId) String() string {
 	switch a {
 	case AlgorithmRSA:
@@ -752,59 +1406,108 @@ func (a AlgorithmId) String() string {
 	}
 }
 
+// Format implements [fmt.Formatter]. It prints the return of the [fmt.Stringer]
+// implementation only for the 's', 'v' and 'q' verbs. The 'x' and 'X' verbs will
+// print the hexadecimal representation of the underlying value rather than the
+// representation of the string.
 func (a AlgorithmId) Format(s fmt.State, f rune) {
 	switch f {
-	case 's', 'v':
-		fmt.Fprintf(s, "%s", a.String())
+	case 's', 'v', 'q':
+		fmt.Fprintf(s, formatString(s, f), removeFormatter(a))
 	default:
 		fmt.Fprintf(s, formatString(s, f), uint16(a))
 	}
 }
 
+// Format implements [fmt.Formatter]. It prints the return of the [fmt.Stringer]
+// implementation only for the 's', 'v' and 'q' verbs. The 'x' and 'X' verbs will
+// print the hexadecimal representation of the underlying value rather than the
+// representation of the string.
 func (a HashAlgorithmId) Format(s fmt.State, f rune) {
 	AlgorithmId(a).Format(s, f)
 }
 
+// Format implements [fmt.Formatter]. It prints the return of the [fmt.Stringer]
+// implementation only for the 's', 'v' and 'q' verbs. The 'x' and 'X' verbs will
+// print the hexadecimal representation of the underlying value rather than the
+// representation of the string.
 func (a SymAlgorithmId) Format(s fmt.State, f rune) {
 	AlgorithmId(a).Format(s, f)
 }
 
+// Format implements [fmt.Formatter]. It prints the return of the [fmt.Stringer]
+// implementation only for the 's', 'v' and 'q' verbs. The 'x' and 'X' verbs will
+// print the hexadecimal representation of the underlying value rather than the
+// representation of the string.
 func (a SymObjectAlgorithmId) Format(s fmt.State, f rune) {
 	AlgorithmId(a).Format(s, f)
 }
 
+// Format implements [fmt.Formatter]. It prints the return of the [fmt.Stringer]
+// implementation only for the 's', 'v' and 'q' verbs. The 'x' and 'X' verbs will
+// print the hexadecimal representation of the underlying value rather than the
+// representation of the string.
 func (a SymModeId) Format(s fmt.State, f rune) {
 	AlgorithmId(a).Format(s, f)
 }
 
+// Format implements [fmt.Formatter]. It prints the return of the [fmt.Stringer]
+// implementation only for the 's', 'v' and 'q' verbs. The 'x' and 'X' verbs will
+// print the hexadecimal representation of the underlying value rather than the
+// representation of the string.
 func (a KDFAlgorithmId) Format(s fmt.State, f rune) {
 	AlgorithmId(a).Format(s, f)
 }
 
+// Format implements [fmt.Formatter]. It prints the return of the [fmt.Stringer]
+// implementation only for the 's', 'v' and 'q' verbs. The 'x' and 'X' verbs will
+// print the hexadecimal representation of the underlying value rather than the
+// representation of the string.
 func (a SigSchemeId) Format(s fmt.State, f rune) {
 	AlgorithmId(a).Format(s, f)
 }
 
+// Format implements [fmt.Formatter]. It prints the return of the [fmt.Stringer]
+// implementation only for the 's', 'v' and 'q' verbs. The 'x' and 'X' verbs will
+// print the hexadecimal representation of the underlying value rather than the
+// representation of the string.
 func (a KeyedHashSchemeId) Format(s fmt.State, f rune) {
 	AlgorithmId(a).Format(s, f)
 }
 
+// Format implements [fmt.Formatter]. It prints the return of the [fmt.Stringer]
+// implementation only for the 's', 'v' and 'q' verbs. The 'x' and 'X' verbs will
+// print the hexadecimal representation of the underlying value rather than the
+// representation of the string.
 func (a AsymSchemeId) Format(s fmt.State, f rune) {
 	AlgorithmId(a).Format(s, f)
 }
 
+// Format implements [fmt.Formatter]. It prints the return of the [fmt.Stringer]
+// implementation only for the 's', 'v' and 'q' verbs. The 'x' and 'X' verbs will
+// print the hexadecimal representation of the underlying value rather than the
+// representation of the string.
 func (a RSASchemeId) Format(s fmt.State, f rune) {
 	AlgorithmId(a).Format(s, f)
 }
 
+// Format implements [fmt.Formatter]. It prints the return of the [fmt.Stringer]
+// implementation only for the 's', 'v' and 'q' verbs. The 'x' and 'X' verbs will
+// print the hexadecimal representation of the underlying value rather than the
+// representation of the string.
 func (a ECCSchemeId) Format(s fmt.State, f rune) {
 	AlgorithmId(a).Format(s, f)
 }
 
+// Format implements [fmt.Formatter]. It prints the return of the [fmt.Stringer]
+// implementation only for the 's', 'v' and 'q' verbs. The 'x' and 'X' verbs will
+// print the hexadecimal representation of the underlying value rather than the
+// representation of the string.
 func (a ObjectTypeId) Format(s fmt.State, f rune) {
 	AlgorithmId(a).Format(s, f)
 }
 
+// String implements [fmt.Stringer].
 func (c Capability) String() string {
 	switch c {
 	case CapabilityAlgs:
@@ -832,15 +1535,20 @@ func (c Capability) String() string {
 	}
 }
 
+// Format implements [fmt.Formatter]. It prints the return of the [fmt.Stringer]
+// implementation only for the 's', 'v' and 'q' verbs. The 'x' and 'X' verbs will
+// print the hexadecimal representation of the underlying value rather than the
+// representation of the string.
 func (c Capability) Format(s fmt.State, f rune) {
 	switch f {
-	case 's', 'v':
-		fmt.Fprintf(s, "%s", c.String())
+	case 's', 'v', 'q':
+		fmt.Fprintf(s, formatString(s, f), removeFormatter(c))
 	default:
 		fmt.Fprintf(s, formatString(s, f), uint32(c))
 	}
 }
 
+// String implements [fmt.Stringer].
 func (o ArithmeticOp) String() string {
 	switch o {
 	case OpEq:
@@ -872,12 +1580,119 @@ func (o ArithmeticOp) String() string {
 	}
 }
 
+// Format implements [fmt.Formatter]. It prints the return of the [fmt.Stringer]
+// implementation only for the 's', 'v' and 'q' verbs. The 'x' and 'X' verbs will
+// print the hexadecimal representation of the underlying value rather than the
+// representation of the string.
 func (o ArithmeticOp) Format(s fmt.State, f rune) {
 	switch f {
-	case 's', 'v':
-		fmt.Fprintf(s, "%s", o.String())
+	case 's', 'v', 'q':
+		fmt.Fprintf(s, formatString(s, f), removeFormatter(o))
 	default:
 		fmt.Fprintf(s, formatString(s, f), uint16(o))
+	}
+}
+
+// String implements [fmt.Stringer].
+func (t StructTag) String() string {
+	switch t {
+	case TagRspCommand:
+		return "TPM_ST_RSP_COMMAND"
+	case TagNoSessions:
+		return "TPM_ST_NO_SESSIONS"
+	case TagSessions:
+		return "TPM_ST_SESSIONS"
+	case TagAttestNV:
+		return "TPM_ST_ATTEST_NV"
+	case TagAttestCommandAudit:
+		return "TPM_ST_ATTEST_COMMAND_AUDIT"
+	case TagAttestSessionAudit:
+		return "TPM_ST_ATTEST_SESSION_AUDIT"
+	case TagAttestCertify:
+		return "TPM_ST_ATTEST_CERTIFY"
+	case TagAttestQuote:
+		return "TPM_ST_ATTEST_QUOTE"
+	case TagAttestTime:
+		return "TPM_ST_ATTEST_TIME"
+	case TagAttestCreation:
+		return "TPM_ST_ATTEST_CREATION"
+	case TagCreation:
+		return "TPM_ST_CREATION"
+	case TagVerified:
+		return "TPM_ST_VERIFIED"
+	case TagAuthSecret:
+		return "TPM_ST_AUTH_SECRET"
+	case TagHashcheck:
+		return "TPM_ST_HASHCHECK"
+	case TagAuthSigned:
+		return "TPM_ST_AUTH_SIGNED"
+	default:
+		return fmt.Sprintf("%#04x", t)
+	}
+}
+
+// Format implements [fmt.Formatter]. It prints the return of the [fmt.Stringer]
+// implementation only for the 's', 'v' and 'q' verbs. The 'x' and 'X' verbs will
+// print the hexadecimal representation of the underlying value rather than the
+// representation of the string.
+func (t StructTag) Format(s fmt.State, f rune) {
+	switch f {
+	case 's', 'v', 'q':
+		fmt.Fprintf(s, formatString(s, f), removeFormatter(t))
+	default:
+		fmt.Fprintf(s, formatString(s, f), uint16(t))
+	}
+}
+
+// String implements [fmt.Stringer].
+func (t StartupType) String() string {
+	switch t {
+	case StartupClear:
+		return "TPM_SU_CLEAR"
+	case StartupState:
+		return "TPM_SU_STATE"
+	default:
+		return fmt.Sprintf("%#04x", t)
+	}
+}
+
+// Format implements [fmt.Formatter]. It prints the return of the [fmt.Stringer]
+// implementation only for the 's', 'v' and 'q' verbs. The 'x' and 'X' verbs will
+// print the hexadecimal representation of the underlying value rather than the
+// representation of the string.
+func (t StartupType) Format(s fmt.State, f rune) {
+	switch f {
+	case 's', 'v', 'q':
+		fmt.Fprintf(s, formatString(s, f), removeFormatter(t))
+	default:
+		fmt.Fprintf(s, formatString(s, f), uint16(t))
+	}
+}
+
+// String implements [fmt.Stringer].
+func (t SessionType) String() string {
+	switch t {
+	case SessionTypeHMAC:
+		return "TPM_SE_HMAC"
+	case SessionTypePolicy:
+		return "TPM_SE_POLICY"
+	case SessionTypeTrial:
+		return "TPM_SE_TRIAL"
+	default:
+		return fmt.Sprintf("%#04x", t)
+	}
+}
+
+// Format implements [fmt.Formatter]. It prints the return of the [fmt.Stringer]
+// implementation only for the 's', 'v' and 'q' verbs. The 'x' and 'X' verbs will
+// print the hexadecimal representation of the underlying value rather than the
+// representation of the string.
+func (t SessionType) Format(s fmt.State, f rune) {
+	switch f {
+	case 's', 'v', 'q':
+		fmt.Fprintf(s, formatString(s, f), removeFormatter(t))
+	default:
+		fmt.Fprintf(s, formatString(s, f), uint16(t))
 	}
 }
 

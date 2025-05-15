@@ -629,7 +629,7 @@ func (TPMErrorBadTag) ResponseCode() ResponseCode {
 }
 
 func (e *TPMErrorBadTag) Error() string {
-	return fmt.Sprintf("TPM returned an error whilst executing command %s: %+v", e.Command, ResponseBadTag)
+	return fmt.Sprintf("TPM returned an error whilst executing command %s: %+s", e.Command, ResponseBadTag)
 }
 
 // TPMError represents a TPM response that indicates an error that is not associated with a

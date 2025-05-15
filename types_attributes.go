@@ -87,7 +87,9 @@ const (
 	AttrAudit
 )
 
-// Locality corresponds to the TPMA_LOCALITY type.
+// Locality corresponds to the TPMA_LOCALITY type. The 5 LSBs are used
+// to represent localities 1 to 4. Localities from 32 to 255 are represented
+// by setting any of the 3 MSBs.
 type Locality uint8
 
 const (
@@ -208,15 +210,19 @@ func (a CommandAttributes) CommandCode() CommandCode {
 // NumberOfCommandHandles returns the number of command handles for the
 // command that a set of attributes belong to.
 func (a CommandAttributes) NumberOfCommandHandles() int {
-	return int((a & 0x0e000000) >> 25)
+	return int((a & AttrCHandles) >> attrCHandlesShift)
 }
 
 const (
-	AttrNV        CommandAttributes = 1 << 22
-	AttrExtensive CommandAttributes = 1 << 23
-	AttrFlushed   CommandAttributes = 1 << 24
-	AttrRHandle   CommandAttributes = 1 << 28
-	AttrV         CommandAttributes = 1 << 29
+	attrCHandlesShift = 25
+
+	AttrCommandIndex CommandAttributes = 0xffff                 // commandIndex
+	AttrNV           CommandAttributes = 1 << 22                // nv
+	AttrExtensive    CommandAttributes = 1 << 23                // extensive
+	AttrFlushed      CommandAttributes = 1 << 24                // flushed
+	AttrCHandles     CommandAttributes = 7 << attrCHandlesShift // cHandles
+	AttrRHandle      CommandAttributes = 1 << 28                // rHandle
+	AttrV            CommandAttributes = 1 << 29                // V
 )
 
 // ModeAttributes correspnds to TPMA_MODES and is returned when querying
@@ -224,5 +230,19 @@ const (
 type ModeAttributes uint32
 
 const (
-	ModeFIPS140_2 ModeAttributes = 1 << 0 // FIPS_140_2
+	ModeFIPS140_2           ModeAttributes = 1 << 0 // FIPS_140_2
+	ModeFIPS140_3           ModeAttributes = 1 << 1 // FIPS_140_3
+	ModeFIPS140_3_Indicator ModeAttributes = 3 << 2 // FIPS_140_3_INDICATOR
 )
+
+type FIPS140_3_Indicator uint8
+
+const (
+	FIPS140_3_NonSecurityService         FIPS140_3_Indicator = 0x00
+	FIPS140_3_ApprovedSecurityService    FIPS140_3_Indicator = 0x01
+	FIPS140_3_NonApprovedSecurityService FIPS140_3_Indicator = 0x10
+)
+
+func (a ModeAttributes) FIPS140_3_Indicator() FIPS140_3_Indicator {
+	return FIPS140_3_Indicator((a & ModeFIPS140_3_Indicator) >> 2)
+}

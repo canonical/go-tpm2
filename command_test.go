@@ -176,13 +176,13 @@ func (s *commandSuite) TestReadResponsePacketUnsuccessfulWithExtraBytes(c *C) {
 func (s *commandSuite) TestUnmarshalResponsePacketInvalidTag(c *C) {
 	p := ResponsePacket(internal_testutil.DecodeHexString(c, "00010000000a00000000"))
 	_, _, _, err := p.Unmarshal(nil)
-	c.Check(err, ErrorMatches, "invalid tag: 1")
+	c.Check(err, ErrorMatches, "invalid tag: 0x0001")
 }
 
 func (s *commandSuite) TestReadResponsePacketInvalidTag(c *C) {
 	r := bytes.NewReader(internal_testutil.DecodeHexString(c, "00010000000a00000000"))
 	_, _, _, err := ReadResponsePacket(r, nil)
-	c.Check(err, ErrorMatches, "invalid tag: 1")
+	c.Check(err, ErrorMatches, "invalid tag: 0x0001")
 }
 
 func (s *commandSuite) TestUnmarshalResponseHandleFail(c *C) {

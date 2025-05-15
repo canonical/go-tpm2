@@ -44,19 +44,21 @@ type NVAttributes uint32
 
 // Type returns the NVType encoded in a NVAttributes value.
 func (a NVAttributes) Type() NVType {
-	return NVType((a & 0xf0) >> 4)
+	return NVType((a & attrNVType) >> attrNVTypeShift)
 }
 
 // AttrsOnly returns the NVAttributes without the encoded [NVType].
 func (a NVAttributes) AttrsOnly() NVAttributes {
-	return a & ^NVAttributes(0xf0)
+	return a & ^attrNVType
 }
 
 const (
-	AttrNVPPWrite        NVAttributes = 1 << 0  // TPMA_NV_PPWRITE
-	AttrNVOwnerWrite     NVAttributes = 1 << 1  // TPMA_NV_OWNERWRITE
-	AttrNVAuthWrite      NVAttributes = 1 << 2  // TPMA_NV_AUTHWRITE
-	AttrNVPolicyWrite    NVAttributes = 1 << 3  // TPMA_NV_POLICY_WRITE
+	AttrNVPPWrite        NVAttributes = 1 << 0 // TPMA_NV_PPWRITE
+	AttrNVOwnerWrite     NVAttributes = 1 << 1 // TPMA_NV_OWNERWRITE
+	AttrNVAuthWrite      NVAttributes = 1 << 2 // TPMA_NV_AUTHWRITE
+	AttrNVPolicyWrite    NVAttributes = 1 << 3 // TPMA_NV_POLICY_WRITE
+	attrNVTypeShift                   = 4
+	attrNVType           NVAttributes = 0xf << attrNVTypeShift
 	AttrNVPolicyDelete   NVAttributes = 1 << 10 // TPMA_NV_POLICY_DELETE
 	AttrNVWriteLocked    NVAttributes = 1 << 11 // TPMA_NV_WRITELOCKED
 	AttrNVWriteAll       NVAttributes = 1 << 12 // TPMA_NV_WRITEALL
