@@ -85,7 +85,7 @@ func (*typesConstantsSuite) TestResponseAuthType(c *C) {
 }
 
 func (*typesConstantsSuite) TestResponseAuthFail(c *C) {
-	rc := ResponseAuthFail + ResponseS + Response1
+	rc := ResponseAuthFail + ResponseS + ResponseIndex1
 
 	c.Check(rc.E(), internal_testutil.IntEqual, 0x0e)
 	c.Check(rc.F(), internal_testutil.IsTrue)
@@ -108,7 +108,7 @@ func (*typesConstantsSuite) TestResponseAuthFail(c *C) {
 }
 
 func (*typesConstantsSuite) TestResponseMode(c *C) {
-	rc := ResponseMode + ResponseP + Response4
+	rc := ResponseMode + ResponseP + ResponseIndex4
 
 	c.Check(rc.E(), internal_testutil.IntEqual, 0x09)
 	c.Check(rc.F(), internal_testutil.IsTrue)
@@ -131,7 +131,7 @@ func (*typesConstantsSuite) TestResponseMode(c *C) {
 }
 
 func (*typesConstantsSuite) TestResponseKey(c *C) {
-	rc := ResponseKey + ResponseH + Response2
+	rc := ResponseKey + ResponseH + ResponseIndex2
 
 	c.Check(rc.E(), internal_testutil.IntEqual, 0x1c)
 	c.Check(rc.F(), internal_testutil.IsTrue)
@@ -200,9 +200,9 @@ func (*typesConstantsSuite) TestVendorResponse(c *C) {
 }
 
 func (*typesConstantsSuite) TestResponseCodeIndex(c *C) {
-	c.Check(ResponseCodeIndex(1), Equals, Response1)
-	c.Check(ResponseCodeIndex(4), Equals, Response4)
-	c.Check(ResponseCodeIndex(15), Equals, ResponseF)
+	c.Check(ResponseCodeIndex(1), Equals, ResponseIndex1)
+	c.Check(ResponseCodeIndex(4), Equals, ResponseIndex4)
+	c.Check(ResponseCodeIndex(15), Equals, ResponseIndexF)
 }
 
 func (*typesConstantsSuite) TestResponseCodeIndexPanics(c *C) {

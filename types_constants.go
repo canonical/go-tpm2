@@ -352,60 +352,61 @@ const (
 	// RespondsS corresponds to TPM_RC_S and is added to a session related error.
 	ResponseS ResponseCode = 0x800
 
-	// Response1 corresponds to TPM_RC_1 and is added to a handle, parameter or
+	// ResponseIndex1 corresponds to TPM_RC_1 and is added to a handle, parameter or
 	// session related error.
-	Response1 ResponseCode = 0x100
+	ResponseIndex1 ResponseCode = 0x100
 
-	// Response2 corresponds to TPM_RC_2 and is added to a handle, parameter or
+	// ResponseIndex2 corresponds to TPM_RC_2 and is added to a handle, parameter or
 	// session related error.
-	Response2 ResponseCode = 0x200
+	ResponseIndex2 ResponseCode = 0x200
 
-	// Response3 corresponds to TPM_RC_3 and is added to a handle, parameter or
+	// ResponseIndex3 corresponds to TPM_RC_3 and is added to a handle, parameter or
 	// session related error.
-	Response3 ResponseCode = 0x300
+	ResponseIndex3 ResponseCode = 0x300
 
-	// Response4 corresponds to TPM_RC_4 and is added to a handle, parameter or
+	// ResponseIndex4 corresponds to TPM_RC_4 and is added to a handle, parameter or
 	// session related error.
-	Response4 ResponseCode = 0x400
+	ResponseIndex4 ResponseCode = 0x400
 
-	// Response5 corresponds to TPM_RC_5 and is added to a handle, parameter or
+	// ResponseIndex5 corresponds to TPM_RC_5 and is added to a handle, parameter or
 	// session related error.
-	Response5 ResponseCode = 0x500
+	ResponseIndex5 ResponseCode = 0x500
 
-	// Response6 corresponds to TPM_RC_6 and is added to a handle, parameter or
+	// ResponseIndex6 corresponds to TPM_RC_6 and is added to a handle, parameter or
 	// session related error.
-	Response6 ResponseCode = 0x600
+	ResponseIndex6 ResponseCode = 0x600
 
-	// Response7 corresponds to TPM_RC_7 and is added to a handle, parameter or
+	// ResponseIndex7 corresponds to TPM_RC_7 and is added to a handle, parameter or
 	// session related error.
-	Response7 ResponseCode = 0x700
+	ResponseIndex7 ResponseCode = 0x700
 
-	// Response8 corresponds to TPM_RC_8 and is added to a parameter related error.
-	Response8 ResponseCode = 0x800
+	// ResponseIndex8 corresponds to TPM_RC_8 and is added to a parameter related error.
+	ResponseIndex8 ResponseCode = 0x800
 
-	// Response9 corresponds to TPM_RC_9 and is added to a parameter related error.
-	Response9 ResponseCode = 0x900
+	// ResponseIndex9 corresponds to TPM_RC_9 and is added to a parameter related error.
+	ResponseIndex9 ResponseCode = 0x900
 
-	// ResponseA corresponds to TPM_RC_A and is added to a parameter related error.
-	ResponseA ResponseCode = 0xa00
+	// ResponseIndexA corresponds to TPM_RC_A and is added to a parameter related error.
+	ResponseIndexA ResponseCode = 0xa00
 
-	// ResponseB corresponds to TPM_RC_B and is added to a parameter related error.
-	ResponseB ResponseCode = 0xb00
+	// ResponseIndexB corresponds to TPM_RC_B and is added to a parameter related error.
+	ResponseIndexB ResponseCode = 0xb00
 
-	// ResponseC corresponds to TPM_RC_C and is added to a parameter related error.
-	ResponseC ResponseCode = 0xc00
+	// ResponseIndexC corresponds to TPM_RC_C and is added to a parameter related error.
+	ResponseIndexC ResponseCode = 0xc00
 
-	// ResponseD corresponds to TPM_RC_D and is added to a parameter related error.
-	ResponseD ResponseCode = 0xd00
+	// ResponseIndexD corresponds to TPM_RC_D and is added to a parameter related error.
+	ResponseIndexD ResponseCode = 0xd00
 
-	// ResponseE corresponds to TPM_RC_E and is added to a parameter related error.
-	ResponseE ResponseCode = 0xe00
+	// ResponseIndexE corresponds to TPM_RC_E and is added to a parameter related error.
+	ResponseIndexE ResponseCode = 0xe00
 
-	// ResponseF corresponds to TPM_RC_F and is added to a parameter related error.
-	ResponseF ResponseCode = 0xf00
+	// ResponseIndexF corresponds to TPM_RC_F and is added to a parameter related error.
+	ResponseIndexF ResponseCode = 0xf00
 
 	// ResponseNMask corresponds to TPM_RC_N_MASK and indicates the associated handle,
 	// parameter or session depending on the status of ResponseH, ResponseP or ResponseS.
+	// Applying this mask will result in a value between ResponseIndex1 and ResponseIndexF.
 	ResponseNMask ResponseCode = 0xf00
 
 	// rcE0 corresponds to the error code (bits 0-6) of format-zero response codes.
@@ -451,18 +452,18 @@ func responseCodeIndexUnchecked(index uint8) ResponseCode {
 }
 
 // ResponseCodeIndex returns the supplied one-indexed handle, parameter or session
-// index as a ResponseCode integer from Response1 to ResponseF that can be added to
-// a base response code. It will panic if index is greater than 0xf. An index of zero
-// is undefined.
+// index as a ResponseCode integer from ResponseIndex1 to ResponseIndexF that can be
+// added to a base response code. It will panic if index is greater than 0xf. An
+// index of zero is undefined.
 func ResponseCodeIndex(index uint8) ResponseCode {
 	rc := responseCodeIndexUnchecked(index)
-	if rc > ResponseF {
+	if rc > ResponseIndexF {
 		panic("invalid handle, parameter, or session index (> 0xf)")
 	}
 	return rc
 }
 
-// ResponseCodeFormat indicates the format or a response code
+// ResponseCodeFormat indicates the format or a response code.
 type ResponseCodeFormat bool
 
 const (
@@ -615,7 +616,7 @@ func (rc ResponseCode) SetHandleIndex(h uint8) ResponseCode {
 	}
 	index := responseCodeIndexUnchecked(h)
 	rc = rc + ResponseH + index
-	if index > Response7 {
+	if index > ResponseIndex7 {
 		panic(fmt.Errorf("%w (invalid handle index overflows bits 8-10)", InvalidResponseCodeError(rc)))
 	}
 	return rc
@@ -631,7 +632,7 @@ func (rc ResponseCode) SetParameterIndex(p uint8) ResponseCode {
 	}
 	index := responseCodeIndexUnchecked(p)
 	rc = rc + ResponseP + index
-	if index > ResponseF {
+	if index > ResponseIndexF {
 		panic(fmt.Errorf("%w (invalid parameter index overflows bits 8-11)", InvalidResponseCodeError(rc)))
 	}
 	return rc
@@ -647,7 +648,7 @@ func (rc ResponseCode) SetSessionIndex(s uint8) ResponseCode {
 	}
 	index := responseCodeIndexUnchecked(s)
 	rc = rc + ResponseS + index
-	if index > Response7 {
+	if index > ResponseIndex7 {
 		panic(fmt.Errorf("%w (invalid session index overflows bits 8-10)", InvalidResponseCodeError(rc)))
 	}
 	return rc
