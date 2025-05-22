@@ -246,7 +246,8 @@ func (e *TPMVendorError) Is(target error) bool {
 }
 
 // WarningCode represents a TPM warning. These are TCG defined format 0 response codes with the
-// severity bit set (response codes 0x900 to 0x97f).
+// severity bit set (response codes 0x900 to 0x97f). They are mapped from their response code
+// minus the S and V bits (0x900).
 type WarningCode uint8
 
 const (
@@ -351,8 +352,10 @@ func (e *TPMWarning) Is(target error) bool {
 // without the severity bit set (response codes 0x100 to 0x17f), and format 1 response codes
 // (response codes 0x080 to 0x0bf).
 //
-// Format 0 error numbers are 7 bits wide and are represented by codes 0x00 to 0x7f. Format 1
-// error numbers are 6 bits wide and are represented by codes 0x80 to 0xbf.
+// Format 0 error numbers are 7 bits wide and are represented by codes 0x00 to 0x7f - they are
+// mapped from their response code minus the V bit (0x100). Format 1 error numbers are 6 bits
+// wide and are represented by codes 0x80 to 0xbf - they are mapped directly from their base
+// response code.
 type ErrorCode uint8
 
 const (
@@ -908,6 +911,8 @@ func (e InvalidResponseCodeError) Error() string {
 // If the response code is invalid, an [InvalidResponseCodeError] error will be returned.
 func DecodeResponseCode(command CommandCode, resp ResponseCode) error {
 	switch {
+	case !resp.IsValid():
+		return InvalidResponseCodeError(resp)
 	case resp == ResponseSuccess:
 		return nil
 	case resp == ResponseBadTag:
@@ -918,16 +923,10 @@ func DecodeResponseCode(command CommandCode, resp ResponseCode) error {
 		switch {
 		case resp.P():
 			// Associated with a parameter
-			if resp.N() == 0 {
-				return InvalidResponseCodeError(resp)
-			}
 			return &TPMParameterError{TPMError: err, Index: int(resp.N())}
-		case resp.N()&uint8(ResponseS>>rcNShift) != 0:
+		case resp.N()&uint8(rcNSessionIndicator>>rcNShift) != 0:
 			// Associated with a session
-			index := resp.N() &^ uint8(ResponseS>>rcNShift)
-			if index == 0 {
-				return InvalidResponseCodeError(resp)
-			}
+			index := resp.N() &^ uint8(rcNSessionIndicator>>rcNShift)
 			return &TPMSessionError{TPMError: err, Index: int(index)}
 		case resp.N() != 0:
 			// Associated with a handle

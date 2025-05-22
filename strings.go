@@ -1089,8 +1089,10 @@ func (rc ResponseCode) String() string {
 		str += " + TPM_RC_P"
 	case rc.N()&uint8(rcNSessionIndicator>>rcNShift) != 0:
 		str += " + TPM_RC_S"
-	default:
+	case rc.N() != 0:
 		str += " + TPM_RC_H"
+	default:
+		return str
 	}
 
 	// For format-one response codes, add the parameter, session or handle index.

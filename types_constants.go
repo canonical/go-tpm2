@@ -445,6 +445,9 @@ const (
 
 	// rcNShift is used to shift the bits defined by ResponseNMask.
 	rcNShift ResponseCode = 8
+
+	rcReserved0 ResponseCode = 0xfffff200 // Reserved bits for format-zero response codes.
+	rcReserved1 ResponseCode = 0xfffff000 // Reserved bits for format-one response codes.
 )
 
 func responseCodeIndexUnchecked(index uint8) ResponseCode {
@@ -456,22 +459,13 @@ func responseCodeIndexUnchecked(index uint8) ResponseCode {
 // added to a base response code. It will panic if index is greater than 0xf. An
 // index of zero is undefined.
 func ResponseCodeIndex(index uint8) ResponseCode {
-	rc := responseCodeIndexUnchecked(index)
-	if rc > ResponseIndexF {
+	if index > 0xf {
 		panic("invalid handle, parameter, or session index (> 0xf)")
 	}
-	return rc
+	return responseCodeIndexUnchecked(index)
 }
 
-// ResponseCodeFormat indicates the format or a response code.
-type ResponseCodeFormat bool
-
-const (
-	ResponseCodeFormat0 ResponseCodeFormat = false // A format-zero response code
-	ResponseCodeFormat1 ResponseCodeFormat = true  // A format-one response code
-)
-
-// ResponseCodeIndexType indicates the type of index that a format-one response code encodes.
+// ResponseCodeIndexType indicates the type of index that a response code encodes.
 type ResponseCodeIndexType uint8
 
 const (
@@ -481,7 +475,7 @@ const (
 	ResponseCodeIndexTypeSession   ResponseCodeIndexType = 3 // A one-indexed session index is encoded
 )
 
-// ResponseCodeVersion indicates the version of a format-zero response code.
+// ResponseCodeVersion indicates the major TPM version of a response code.
 type ResponseCodeVersion bool
 
 const (
@@ -489,7 +483,7 @@ const (
 	ResponseCodeVersionTPM2  ResponseCodeVersion = true  // TPM2 response
 )
 
-// ResponseCodeSeverity indicates the severity of a format-zero response code.
+// ResponseCodeSeverity indicates the severity of a response code.
 type ResponseCodeSeverity bool
 
 const (
@@ -497,54 +491,17 @@ const (
 	ResponseCodeSeverityError   ResponseCodeSeverity = true  // An error
 )
 
-// ResponseCodeSpec indicates where a format-zero response code is defined (by
-// the TCG or TPM vendor)
+// ResponseCodeSpec indicates who a response code is defined by (the TCG
+// or TPM vendor).
 type ResponseCodeSpec bool
 
 const (
-	ResponseCodeSpecTCG    ResponseCodeSpec = false // Defined by the TCG
-	ResponseCodeSpecVendor ResponseCodeSpec = true  // Defined by the TPM vendor
+	ResponseCodeSpecTCG       ResponseCodeSpec = false // Defined by the TCG
+	ResponseCodeSpecTPMVendor ResponseCodeSpec = true  // Defined by the TPM vendor
 )
 
-// ResponseCodeType indicates some properties of a [ResponseCode].
-type ResponseCodeType uint8
-
-const (
-	responseCodeTypeFormatOne ResponseCodeType = 1 << 0
-	responseCodeTypeIndexType ResponseCodeType = 3 << 1
-	responseCodeTypeTPM2      ResponseCodeType = 1 << 3
-	responseCodeTypeWarning   ResponseCodeType = 1 << 4
-	responseCodeTypeVendor    ResponseCodeType = 1 << 5
-)
-
-// Format returns the format of the [ResponseCode] of this type.
-func (t ResponseCodeType) Format() ResponseCodeFormat {
-	return ResponseCodeFormat(t&responseCodeTypeFormatOne != 0)
-}
-
-// IndexType returns the type of index encoded in the [ResponseCode] of this
-// type.
-func (t ResponseCodeType) IndexType() ResponseCodeIndexType {
-	return ResponseCodeIndexType(t & responseCodeTypeIndexType >> 1)
-}
-
-// Version returns the version of the [ResponseCode] of this type.
-func (t ResponseCodeType) Version() ResponseCodeVersion {
-	return ResponseCodeVersion(t&responseCodeTypeTPM2 != 0)
-}
-
-// Severity returns the severity of the [ResponseCode] of this type.
-func (t ResponseCodeType) Severity() ResponseCodeSeverity {
-	return ResponseCodeSeverity(t&responseCodeTypeWarning == 0)
-}
-
-// Spec returns where the [ResponseCode] of this type is defined.
-func (t ResponseCodeType) Spec() ResponseCodeSpec {
-	return ResponseCodeSpec(t&responseCodeTypeVendor != 0)
-}
-
-// Base returns the base format-one response code without any handle, parameter or session
-// index. This returns format-zero response codes without any changes.
+// Base returns the base response code without any handle, parameter or session index
+// encoded.
 func (rc ResponseCode) Base() ResponseCode {
 	if rc.F() {
 		// Format-one response codes are returned without their handle, parameter
@@ -556,50 +513,100 @@ func (rc ResponseCode) Base() ResponseCode {
 	return rc
 }
 
-// Type returns information about the type of this response code.
-func (rc ResponseCode) Type() ResponseCodeType {
-	var out ResponseCodeType
-
-	switch rc.F() {
-	case true:
-		out |= responseCodeTypeFormatOne
-		out |= responseCodeTypeTPM2
-
+// IsValid indicates if this is a valid response code. An invalid response
+// code has one or more reserved bits set.
+func (rc ResponseCode) IsValid() bool {
+	if rc.F() {
+		// Format-one response code.
 		switch {
-		case rc&rcP != 0:
-			// This is associated with a parameter
-			out |= ResponseCodeType(ResponseCodeIndexTypeParameter << 1)
-		case rc&rcNSessionIndicator != 0:
-			// This is associated with a session
-			out |= ResponseCodeType(ResponseCodeIndexTypeSession << 1)
+		case rc&rcReserved1 != 0:
+			// A reserved bit is set.
+			return false
+		case rc.P() && rc.N() == 0:
+			// Parameter 0.
+			return false
+		case rc.N() == (rcNSessionIndicator >> rcNShift):
+			// Session 0.
+			return false
 		default:
-			// This is associated with a handle
-			out |= ResponseCodeType(ResponseCodeIndexTypeHandle << 1)
-		}
-	case false:
-		if rc.V() {
-			out |= responseCodeTypeTPM2
-		}
-		if rc.S() {
-			out |= responseCodeTypeWarning
-		}
-		if rc.T() {
-			out |= responseCodeTypeVendor
+			// Note that we permit handle 0 as being valid and interpret
+			// this as being a format-one response code that is unrelated
+			// to a parameter, handle, or session.
+			return true
 		}
 	}
 
-	return out
+	// Format-zero response code.
+	return rc&rcReserved0 == 0
 }
 
-// Index returns the one-indexed handle, parameter or session index associated with this format-one
-// response code. This will return 0 if the response code is not associated with a specific handle,
-// parameter or session.
+// IndexType indicates the type of index that is encoded in this response
+// code, if there is any. Call [ResponseCode.Index] to obtain the encoded index.
+func (rc ResponseCode) IndexType() ResponseCodeIndexType {
+	switch {
+	case !rc.F():
+		// Format-zero response code.
+		return ResponseCodeIndexTypeNone
+	case rc.P():
+		// Format-one response code with the P bit set.
+		return ResponseCodeIndexTypeParameter
+	case rc.N()&(rcNSessionIndicator>>rcNShift) != 0:
+		// Format-one response code with the P bit clear and the MSB of N set.
+		return ResponseCodeIndexTypeSession
+	case rc.N() != 0:
+		// Format-one response code with the P bit and the MSB of N clear,
+		// with N otherwise non-zero.
+		return ResponseCodeIndexTypeHandle
+	default:
+		// Format-one response code with the P bit and N bits all clear.
+		return ResponseCodeIndexTypeNone
+	}
+}
+
+// Version returns the TPM major version associated with this response code.
+func (rc ResponseCode) Version() ResponseCodeVersion {
+	if rc.F() {
+		// Format-one response codes are always TPM2.
+		return ResponseCodeVersionTPM2
+	}
+
+	// Format-zero response codes depend on the V bit.
+	return ResponseCodeVersion(rc.V())
+}
+
+// Severity returns the severity of this response code.
+func (rc ResponseCode) Severity() ResponseCodeSeverity {
+	if rc.F() {
+		// Format-one response codes are always errors.
+		return ResponseCodeSeverityError
+	}
+
+	// Format-zero response codes depend on the S bit.
+	return ResponseCodeSeverity(!rc.S())
+}
+
+// Spec returns where this response code is defined (by the TCG or the TPM vendor).
+func (rc ResponseCode) Spec() ResponseCodeSpec {
+	if rc.F() {
+		// Format-one response codes are defined by the TCG.
+		return ResponseCodeSpecTCG
+	}
+
+	// Format-zero response codes depend on the T bit.
+	return ResponseCodeSpec(rc.T())
+}
+
+// Index returns the one-indexed handle, parameter or session index associated with this response
+// code. Call [ResponseCode.IndexType] to obtain the type of index. This will return 0 if the
+// response code is not associated with a specific handle, parameter or session (ie, if
+// [ResponseCode.IndexType] returns ResponseCodeIndexTypeNone).
 func (rc ResponseCode) Index() uint8 {
-	switch rc.Type().IndexType() {
+	switch rc.IndexType() {
 	case ResponseCodeIndexTypeHandle, ResponseCodeIndexTypeSession:
 		// Handles and sessions only use the lower 3 bits of the N field.
 		return rc.N() &^ uint8(rcNSessionIndicator>>rcNShift)
 	case ResponseCodeIndexTypeParameter:
+		// Parameters use all 4 bits of the N field.
 		return rc.N()
 	default:
 		return 0
@@ -608,7 +615,8 @@ func (rc ResponseCode) Index() uint8 {
 
 // SetHandleIndex sets the associated one-indexed handle index for this response code. This
 // will panic if the handle index is out of range or the response code is not a format-one
-// response code. A handle index of zero indicates that the handle is unspecified.
+// response code. A handle index of zero will mark this as a response code that is not associated
+// with a parameter, handle, or session.
 func (rc ResponseCode) SetHandleIndex(h uint8) ResponseCode {
 	rc = rc.Base()
 	if !rc.F() {
@@ -617,39 +625,45 @@ func (rc ResponseCode) SetHandleIndex(h uint8) ResponseCode {
 	index := responseCodeIndexUnchecked(h)
 	rc = rc + ResponseH + index
 	if index > ResponseIndex7 {
-		panic(fmt.Errorf("%w (invalid handle index overflows bits 8-10)", InvalidResponseCodeError(rc)))
+		panic(fmt.Errorf("%w (invalid handle index %d overflows bits 8-10)", InvalidResponseCodeError(rc), h))
 	}
 	return rc
 }
 
 // SetParameterIndex sets the associated one-indexed parameter index for this response code. This
 // will panic if the parameter index is out of range or the response code is not a format-one
-// response code or the specified parameter index is zero.
+// response code.
 func (rc ResponseCode) SetParameterIndex(p uint8) ResponseCode {
 	rc = rc.Base()
 	if !rc.F() {
 		panic(fmt.Errorf("%w (base response code is not a format-1 response code)", InvalidResponseCodeError(rc)))
 	}
+	if p == 0 {
+		panic("invalid parameter index 0")
+	}
 	index := responseCodeIndexUnchecked(p)
 	rc = rc + ResponseP + index
 	if index > ResponseIndexF {
-		panic(fmt.Errorf("%w (invalid parameter index overflows bits 8-11)", InvalidResponseCodeError(rc)))
+		panic(fmt.Errorf("%w (invalid parameter index %d overflows bits 8-11)", InvalidResponseCodeError(rc), p))
 	}
 	return rc
 }
 
 // SetSession sets the associated one-indexed session index for this response code. This
 // will panic if the session index is out of range or the response code is not a format-one
-// response code. A session index of zero indicates that the session is unspecified.
+// response code.
 func (rc ResponseCode) SetSessionIndex(s uint8) ResponseCode {
 	rc = rc.Base()
 	if !rc.F() {
 		panic(fmt.Errorf("%w (base response code is not a format-1 response code)", InvalidResponseCodeError(rc)))
 	}
+	if s == 0 {
+		panic("invalid session index 0")
+	}
 	index := responseCodeIndexUnchecked(s)
 	rc = rc + ResponseS + index
 	if index > ResponseIndex7 {
-		panic(fmt.Errorf("%w (invalid session index overflows bits 8-10)", InvalidResponseCodeError(rc)))
+		panic(fmt.Errorf("%w (invalid session index %d overflows bits 8-10)", InvalidResponseCodeError(rc), s))
 	}
 	return rc
 }

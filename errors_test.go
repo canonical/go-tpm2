@@ -21,33 +21,19 @@ func (s *errorsSuite) TestDecodeSuccess(c *C) {
 	c.Check(DecodeResponseCode(CommandClear, ResponseSuccess), IsNil)
 }
 
+func (s *errorsSuite) TestDecodeInvalid(c *C) {
+	err := DecodeResponseCode(CommandGetCapability, ResponseValue+ResponseP)
+	c.Check(err, ErrorMatches, "invalid response code 0x000000c4")
+	c.Assert(err, internal_testutil.ConvertibleTo, InvalidResponseCodeError(0))
+	c.Check(err.(InvalidResponseCodeError), Equals, InvalidResponseCodeError(0xc4))
+}
+
 func (s *errorsSuite) TestDecodeBadTag(c *C) {
 	err := DecodeResponseCode(CommandGetCapability, ResponseBadTag)
 	c.Check(err, ErrorMatches, "TPM returned an error whilst executing command TPM_CC_GetCapability: TPM_RC_BAD_TAG \\(defined for compatibility with TPM 1.2\\)")
 	c.Assert(err, internal_testutil.ConvertibleTo, &TPMErrorBadTag{})
 	c.Check(err.(*TPMErrorBadTag), DeepEquals, &TPMErrorBadTag{Command: CommandGetCapability})
 	c.Check(err.(*TPMErrorBadTag).ResponseCode(), Equals, ResponseBadTag)
-}
-
-func (s *errorsSuite) TestDecodeInvalid(c *C) {
-	err := DecodeResponseCode(CommandGetCapability, 0x1)
-	c.Check(err, ErrorMatches, "invalid response code 0x00000001")
-	c.Assert(err, internal_testutil.ConvertibleTo, InvalidResponseCodeError(0))
-	c.Check(err.(InvalidResponseCodeError), Equals, InvalidResponseCodeError(0x1))
-}
-
-func (s *errorsSuite) TestDecodeInvalidParameter(c *C) {
-	err := DecodeResponseCode(CommandStartAuthSession, 0xc9)
-	c.Check(err, ErrorMatches, "invalid response code 0x000000c9")
-	c.Assert(err, internal_testutil.ConvertibleTo, InvalidResponseCodeError(0))
-	c.Check(err.(InvalidResponseCodeError), Equals, InvalidResponseCodeError(0xc9))
-}
-
-func (s *errorsSuite) TestDecodeInvalidSession(c *C) {
-	err := DecodeResponseCode(CommandUnseal, 0x88e)
-	c.Check(err, ErrorMatches, "invalid response code 0x0000088e")
-	c.Assert(err, internal_testutil.ConvertibleTo, InvalidResponseCodeError(0))
-	c.Check(err.(InvalidResponseCodeError), Equals, InvalidResponseCodeError(0x88e))
 }
 
 func (s *errorsSuite) TestDecodeVendorError(c *C) {
@@ -82,7 +68,7 @@ func (s *errorsSuite) TestDecodeError0(c *C) {
 	c.Check(err.(*TPMError).ResponseCode(), Equals, ResponsePCRChanged)
 }
 
-func (s *errorsSuite) TestDecodeError1(c *C) {
+func (s *errorsSuite) TestDecodeParameterError1(c *C) {
 	err := DecodeResponseCode(CommandStirRandom, ResponseInsufficient.SetParameterIndex(1))
 	c.Check(err, ErrorMatches, "TPM returned an error for parameter 1 whilst executing command TPM_CC_StirRandom: TPM_RC_INSUFFICIENT \\+ TPM_RC_P \\+ TPM_RC_1 \\(the TPM was unable to unmarshal a value because there were not enough octets in the input buffer\\)")
 	c.Assert(err, internal_testutil.ConvertibleTo, &TPMParameterError{})
@@ -91,7 +77,7 @@ func (s *errorsSuite) TestDecodeError1(c *C) {
 	c.Check(err.(*TPMParameterError).TPMError.ResponseCode(), Equals, ResponseInsufficient)
 }
 
-func (s *errorsSuite) TestDecodeParameterError(c *C) {
+func (s *errorsSuite) TestDecodeParameterError2(c *C) {
 	err := DecodeResponseCode(CommandStartAuthSession, ResponseMode.SetParameterIndex(4))
 	c.Check(err, ErrorMatches, "TPM returned an error for parameter 4 whilst executing command TPM_CC_StartAuthSession: TPM_RC_MODE \\+ TPM_RC_P \\+ TPM_RC_4 \\(mode of operation not supported\\)")
 	c.Assert(err, internal_testutil.ConvertibleTo, &TPMParameterError{})
@@ -116,6 +102,14 @@ func (s *errorsSuite) TestDecodeHandleError(c *C) {
 	c.Check(err.(*TPMHandleError), DeepEquals, &TPMHandleError{TPMError: &TPMError{Command: CommandCertify, Code: ErrorKey}, Index: 2})
 	c.Check(err.(*TPMHandleError).ResponseCode(), Equals, ResponseKey.SetHandleIndex(2))
 	c.Check(err.(*TPMHandleError).TPMError.ResponseCode(), Equals, ResponseKey)
+}
+
+func (s *errorsSuite) TestDecodeError1(c *C) {
+	err := DecodeResponseCode(CommandStirRandom, ResponseInsufficient)
+	c.Check(err, ErrorMatches, "TPM returned an error whilst executing command TPM_CC_StirRandom: TPM_RC_INSUFFICIENT \\(the TPM was unable to unmarshal a value because there were not enough octets in the input buffer\\)")
+	c.Assert(err, internal_testutil.ConvertibleTo, &TPMError{})
+	c.Check(err.(*TPMError), DeepEquals, &TPMError{Command: CommandStirRandom, Code: ErrorInsufficient})
+	c.Check(err.(*TPMError).ResponseCode(), Equals, ResponseInsufficient)
 }
 
 func (s *errorsSuite) TestTPMErrorIs1(c *C) {
