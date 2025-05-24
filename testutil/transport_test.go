@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"crypto/rsa"
+	"errors"
 	"math"
 
 	. "gopkg.in/check.v1"
@@ -83,38 +84,35 @@ func (s *transportSuite) TestResponseIntercept(c *C) {
 	s.initTPMContext(c, 0)
 	s.deferCloseTpm(c)
 
-	var expectedValue uint32
+	expectedValue := uint32(0xffffffff) // This should be an invalid value for TPM_PT_PS_FAMILY_INDICATOR.
 	s.Transport.ResponseIntercept = func(cmdCode tpm2.CommandCode, cmdHandles tpm2.HandleList, cmdAuthArea []tpm2.AuthCommand, cpBytes []byte, rsp *bytes.Buffer) {
 		c.Check(cmdCode, Equals, tpm2.CommandGetCapability)
 		c.Check(cmdHandles, internal_testutil.LenEquals, 0)
+		c.Check(cmdAuthArea, internal_testutil.LenEquals, 0)
 
 		var cap tpm2.Capability
 		var prop tpm2.Property
 		var n uint32
 		_, err := mu.UnmarshalFromBytes(cpBytes, &cap, &prop, &n)
+		c.Assert(err, IsNil)
 		c.Check(cap, Equals, tpm2.CapabilityTPMProperties)
 		c.Check(prop, Equals, tpm2.PropertyPSFamilyIndicator)
 		c.Check(n, internal_testutil.IntEqual, 1)
 
 		rc, rpBytes, rAuthArea, err := tpm2.ReadResponsePacket(rsp, nil)
 		c.Assert(err, IsNil)
-		c.Assert(rc, Equals, tpm2.ResponseSuccess)
+		c.Check(rc, Equals, tpm2.ResponseSuccess)
 		c.Check(rAuthArea, internal_testutil.LenEquals, 0)
 
 		var moreData bool
 		var capabilityData *tpm2.CapabilityData
 		_, err = mu.UnmarshalFromBytes(rpBytes, &moreData, &capabilityData)
 		c.Assert(err, IsNil)
+		c.Assert(capabilityData.Capability, Equals, tpm2.CapabilityTPMProperties)
 		c.Assert(capabilityData.Data.TPMProperties, internal_testutil.LenEquals, 1)
+		c.Check(capabilityData.Data.TPMProperties[0].Property, Equals, tpm2.PropertyPSFamilyIndicator)
+		c.Check(capabilityData.Data.TPMProperties[0].Value, Not(Equals), expectedValue)
 
-		switch capabilityData.Data.TPMProperties[0].Value {
-		case 1: // PC-Client
-			// For PC-Client, mock the wrong value we get from swtpm which is the value of TPM_PT_FAMILY_INDICATOR ("2.0", null terminated ASCII)
-			expectedValue = 0x323e3000
-		default:
-			// For everything else, mock the PC-Client value
-			expectedValue = 1
-		}
 		capabilityData.Data.TPMProperties[0].Value = expectedValue
 
 		rsp.Reset()
@@ -125,6 +123,234 @@ func (s *transportSuite) TestResponseIntercept(c *C) {
 	val, err := s.TPM.GetCapabilityTPMProperty(tpm2.PropertyPSFamilyIndicator)
 	c.Check(err, IsNil)
 	c.Check(val, Equals, expectedValue)
+}
+
+func (s *transportSuite) TestPushResponseFilter(c *C) {
+	s.initTPMContext(c, 0)
+	s.deferCloseTpm(c)
+
+	expectedValue := uint32(0xffffffff) // This should be an invalid value for TPM_PT_PS_FAMILY_INDICATOR.
+	restore := s.Transport.PushResponseFilter(func(cmdCode tpm2.CommandCode, cmdHandles tpm2.HandleList, cmdAuthArea []tpm2.AuthCommand, cpBytes []byte, rsp *bytes.Buffer) error {
+		c.Check(cmdCode, Equals, tpm2.CommandGetCapability)
+		c.Check(cmdHandles, internal_testutil.LenEquals, 0)
+		c.Check(cmdAuthArea, internal_testutil.LenEquals, 0)
+
+		var cap tpm2.Capability
+		var prop tpm2.Property
+		var n uint32
+		_, err := mu.UnmarshalFromBytes(cpBytes, &cap, &prop, &n)
+		c.Assert(err, IsNil)
+		c.Check(cap, Equals, tpm2.CapabilityTPMProperties)
+		c.Check(prop, Equals, tpm2.PropertyPSFamilyIndicator)
+		c.Check(n, internal_testutil.IntEqual, 1)
+
+		rc, rpBytes, rAuthArea, err := tpm2.ReadResponsePacket(rsp, nil)
+		c.Assert(err, IsNil)
+		c.Check(rc, Equals, tpm2.ResponseSuccess)
+		c.Check(rAuthArea, internal_testutil.LenEquals, 0)
+
+		var moreData bool
+		var capabilityData *tpm2.CapabilityData
+		_, err = mu.UnmarshalFromBytes(rpBytes, &moreData, &capabilityData)
+		c.Assert(err, IsNil)
+		c.Assert(capabilityData.Capability, Equals, tpm2.CapabilityTPMProperties)
+		c.Assert(capabilityData.Data.TPMProperties, internal_testutil.LenEquals, 1)
+		c.Check(capabilityData.Data.TPMProperties[0].Property, Equals, tpm2.PropertyPSFamilyIndicator)
+		c.Check(capabilityData.Data.TPMProperties[0].Value, Not(Equals), expectedValue)
+
+		capabilityData.Data.TPMProperties[0].Value = expectedValue
+
+		rsp.Reset()
+		newRpBytes := mu.MustMarshalToBytes(moreData, capabilityData)
+		c.Assert(tpm2.WriteResponsePacket(rsp, rc, nil, newRpBytes, rAuthArea), IsNil)
+		return nil
+	})
+	c.Assert(restore, NotNil)
+	defer restore()
+
+	val, err := s.TPM.GetCapabilityTPMProperty(tpm2.PropertyPSFamilyIndicator)
+	c.Check(err, IsNil)
+	c.Check(val, Equals, expectedValue)
+}
+
+func (s *transportSuite) TestPushChainedResponseFilters(c *C) {
+	s.initTPMContext(c, 0)
+	s.deferCloseTpm(c)
+
+	makeOverrideTPMProperty := func(prop tpm2.Property, value uint32) ResponseFilter {
+		return func(cmdCode tpm2.CommandCode, cmdHandles tpm2.HandleList, cmdAuthArea []tpm2.AuthCommand, cpBytes []byte, rsp *bytes.Buffer) error {
+			c.Check(cmdCode, Equals, tpm2.CommandGetCapability)
+			c.Check(cmdHandles, internal_testutil.LenEquals, 0)
+			c.Check(cmdAuthArea, internal_testutil.LenEquals, 0)
+
+			var cap tpm2.Capability
+			var requestedProp tpm2.Property
+			var n uint32
+			_, err := mu.UnmarshalFromBytes(cpBytes, &cap, &requestedProp, &n)
+			c.Assert(err, IsNil)
+			if cap != tpm2.CapabilityTPMProperties || requestedProp != prop {
+				return nil
+			}
+
+			rc, rpBytes, _, err := tpm2.ReadResponsePacket(rsp, nil)
+			c.Assert(err, IsNil)
+			c.Check(rc, Equals, tpm2.ResponseSuccess)
+
+			var moreData bool
+			var capabilityData *tpm2.CapabilityData
+			_, err = mu.UnmarshalFromBytes(rpBytes, &moreData, &capabilityData)
+			c.Assert(err, IsNil)
+			c.Assert(capabilityData.Capability, Equals, tpm2.CapabilityTPMProperties)
+			c.Assert(capabilityData.Data.TPMProperties, internal_testutil.LenEquals, 1)
+			c.Check(capabilityData.Data.TPMProperties[0].Property, Equals, prop)
+			c.Check(capabilityData.Data.TPMProperties[0].Value, Not(Equals), value)
+
+			capabilityData.Data.TPMProperties[0].Value = value
+
+			rsp.Reset()
+			newRpBytes := mu.MustMarshalToBytes(moreData, capabilityData)
+			c.Assert(tpm2.WriteResponsePacket(rsp, rc, nil, newRpBytes, nil), IsNil)
+			return nil
+		}
+	}
+
+	// math.MaxUint32 should be an invalid value for TPM_PT_PS_FAMILY_INDICATOR.
+	restore := s.Transport.PushResponseFilter(makeOverrideTPMProperty(tpm2.PropertyPSFamilyIndicator, uint32(0xffffffff)))
+	c.Assert(restore, NotNil)
+	defer restore()
+
+	// 0x1fffff should be an invalid value for TPM_PT_PS_YEAR because it represents
+	// the year 2097151.
+	restore = s.Transport.PushResponseFilter(makeOverrideTPMProperty(tpm2.PropertyPSYear, uint32(0x1fffff)))
+	c.Assert(restore, NotNil)
+	defer restore()
+
+	val, err := s.TPM.GetCapabilityTPMProperty(tpm2.PropertyPSFamilyIndicator)
+	c.Check(err, IsNil)
+	c.Check(val, Equals, uint32(0xffffffff))
+
+	val, err = s.TPM.GetCapabilityTPMProperty(tpm2.PropertyPSYear)
+	c.Check(err, IsNil)
+	c.Check(val, Equals, uint32(0x1fffff))
+}
+
+func (s *transportSuite) TestResponseFilterError(c *C) {
+	s.initTPMContext(c, 0)
+	s.deferCloseTpm(c)
+
+	restore := s.Transport.PushResponseFilter(func(cmdCode tpm2.CommandCode, cmdHandles tpm2.HandleList, cmdAuthArea []tpm2.AuthCommand, cpBytes []byte, rsp *bytes.Buffer) error {
+		return errors.New("some error")
+	})
+	c.Assert(restore, NotNil)
+	defer restore()
+
+	_, err := s.TPM.GetCapabilityTPMProperty(tpm2.PropertyPSFamilyIndicator)
+	c.Check(err, ErrorMatches, `cannot complete read operation on Transport: cannot process response filters: response filter 0 returned an error: some error`)
+	var te *tpm2.TransportError
+	c.Check(err, internal_testutil.ErrorAs, &te)
+}
+
+func (s *transportSuite) TestPushCommandFilter(c *C) {
+	s.initTPMContext(c, 0)
+	s.deferCloseTpm(c)
+
+	restore := s.Transport.PushCommandFilter(func(cmd *bytes.Buffer) error {
+		command, handles, authArea, params, err := tpm2.ReadCommandPacket(bytes.NewReader(cmd.Bytes()), 0)
+		c.Assert(err, IsNil)
+		c.Check(command, Equals, tpm2.CommandGetCapability)
+		c.Check(handles, internal_testutil.LenEquals, 0)
+		c.Check(authArea, internal_testutil.LenEquals, 0)
+
+		var cap tpm2.Capability
+		var prop tpm2.Property
+		var n uint32
+		_, err = mu.UnmarshalFromBytes(params, &cap, &prop, &n)
+		c.Assert(err, IsNil)
+		c.Check(cap, Equals, tpm2.CapabilityTPMProperties)
+		c.Check(prop, Equals, tpm2.PropertyFamilyIndicator)
+		c.Check(n, internal_testutil.IntEqual, 1)
+
+		params = mu.MustMarshalToBytes(cap, prop+1, n)
+
+		cmd.Reset()
+		c.Assert(tpm2.WriteCommandPacket(cmd, command, handles, authArea, params), IsNil)
+		return nil
+	})
+	c.Assert(restore, NotNil)
+	defer restore()
+
+	props, err := s.TPM.GetCapabilityTPMProperties(tpm2.PropertyFamilyIndicator, 1)
+	c.Assert(err, IsNil)
+	c.Assert(props, internal_testutil.LenEquals, 1)
+	c.Check(props[0].Property, Equals, tpm2.PropertyLevel)
+	c.Check(props[0].Value, Equals, uint32(0))
+}
+
+func (s *transportSuite) TestPushChainedCommandFilters(c *C) {
+	s.initTPMContext(c, 0)
+	s.deferCloseTpm(c)
+
+	makeOffsetTPMProperty := func(prop, offset tpm2.Property) CommandFilter {
+		return func(cmd *bytes.Buffer) error {
+			command, handles, authArea, params, err := tpm2.ReadCommandPacket(bytes.NewReader(cmd.Bytes()), 0)
+			c.Assert(err, IsNil)
+			c.Check(command, Equals, tpm2.CommandGetCapability)
+			c.Check(handles, internal_testutil.LenEquals, 0)
+			c.Check(authArea, internal_testutil.LenEquals, 0)
+
+			var cap tpm2.Capability
+			var requestedProp tpm2.Property
+			var n uint32
+			_, err = mu.UnmarshalFromBytes(params, &cap, &requestedProp, &n)
+			c.Assert(err, IsNil)
+			c.Check(cap, Equals, tpm2.CapabilityTPMProperties)
+			c.Check(n, internal_testutil.IntEqual, 1)
+			if requestedProp < prop {
+				return nil
+			}
+
+			params = mu.MustMarshalToBytes(cap, requestedProp+offset, n)
+
+			cmd.Reset()
+			c.Assert(tpm2.WriteCommandPacket(cmd, command, handles, authArea, params), IsNil)
+			return nil
+		}
+	}
+
+	restore := s.Transport.PushCommandFilter(makeOffsetTPMProperty(tpm2.PropertyPermanent, tpm2.Property(2)))
+	c.Assert(restore, NotNil)
+	defer restore()
+
+	restore = s.Transport.PushCommandFilter(makeOffsetTPMProperty(tpm2.PropertyFamilyIndicator, tpm2.Property(1)))
+	c.Assert(restore, NotNil)
+	defer restore()
+
+	props, err := s.TPM.GetCapabilityTPMProperties(tpm2.PropertyFamilyIndicator, 1)
+	c.Assert(err, IsNil)
+	c.Assert(props, internal_testutil.LenEquals, 1)
+	c.Check(props[0].Property, Equals, tpm2.PropertyLevel)
+	c.Check(props[0].Value, Equals, uint32(0))
+
+	props, err = s.TPM.GetCapabilityTPMProperties(tpm2.PropertyMaxAuthFail, 1)
+	c.Assert(err, IsNil)
+	c.Assert(props, internal_testutil.LenEquals, 1)
+	c.Check(props[0].Property, Equals, tpm2.PropertyNVWriteRecovery)
+}
+
+func (s *transportSuite) TestCommandFilterError(c *C) {
+	s.initTPMContext(c, 0)
+	s.deferCloseTpm(c)
+
+	restore := s.Transport.PushCommandFilter(func(cmd *bytes.Buffer) error {
+		return errors.New("some error")
+	})
+	c.Assert(restore, NotNil)
+	defer restore()
+
+	_, err := s.TPM.GetCapabilityTPMProperty(tpm2.PropertyPSFamilyIndicator)
+	c.Check(err, ErrorMatches, `cannot complete write operation on Transport: cannot process command filters: command filter 0 returned an error: some error`)
+	var te *tpm2.TransportError
+	c.Check(err, internal_testutil.ErrorAs, &te)
 }
 
 func (s *transportSuite) TestCommandLog(c *C) {

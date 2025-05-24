@@ -266,6 +266,27 @@ func (r *CommandRecord) UnmarshalResponse() (rc tpm2.ResponseCode, handle tpm2.H
 	return r.RspCode, r.RspHandle, r.RpBytes, r.RspAuthArea, nil
 }
 
+type (
+	// CommandFilter provides a way to filter commands received by the
+	// Transport type before they are sent to the underlying transport.
+	// Filters do this by modifying the contents of the supplied buffer
+	// which contains the command packet at the start of the unread
+	// portion. Implementations modify the buffer in such a way that the
+	// updated command packet is returned at the start of the unread
+	// portion.
+	CommandFilter = func(cmd *bytes.Buffer) error
+
+	// ResponseFilter provides a way to filter responses received from
+	// the underlying transport before they are received by the client.
+	// Filters have access to the original command parameters. They
+	// modify the response by modifying the contents of the supplied
+	// buffer, which contains the response packet at the start of the
+	// unread portion. Implementations modify the buffer in such a way
+	// that the updated response packet is returned at the start of the
+	// unread portion.
+	ResponseFilter = func(cmdCode tpm2.CommandCode, cmdHandles tpm2.HandleList, cmdAuthArea []tpm2.AuthCommand, cpBytes []byte, rsp *bytes.Buffer) error
+)
+
 // TCTI is a special proxy inteface used for testing, which wraps a real interface.
 // It tracks changes to the TPM state and restores it when the connection is closed,
 // and also performs some permission checks to ensure that a test does not access
@@ -305,13 +326,25 @@ type Transport struct {
 	didUpdatePcrAllocation bool
 
 	// CommandLog keeps a record of all of the commands executed via
-	// this interface
+	// this interface. For each record, the command code, command handles,
+	// command parameters and command auth area will match those sent to
+	// the underlying transport, after running any filter added by
+	// PushCommandFilter. The response code, response handle, response
+	// parameters and response auth area will match those received from
+	// the underlying transport, before running any filter added by
+	// PushResponseFilter.
 	CommandLog            []*CommandRecord
 	disableCommandLogging bool
 
 	// ResponseIntercept allows a test to modify a response packet returned
-	// back to a command called by a test
+	// back to a command called by a test.
+	// Deprecated: Use Transport.PushResponseFilter
 	ResponseIntercept func(cmdCode tpm2.CommandCode, cmdHandles tpm2.HandleList, cmdAuthArea []tpm2.AuthCommand, cpBytes []byte, rsp *bytes.Buffer)
+
+	commandFilterHead    CommandFilter
+	commandFilterLength  int
+	responseFilterHead   ResponseFilter
+	responseFilterLength int
 
 	closeOnce sync.Once  // only run Close once
 	closeMu   sync.Mutex // although tpm2.Transport requires Read/Write to be used from a single goroutine, the same is not true of Close.
@@ -342,7 +375,7 @@ func (r *responseReader) Read(data []byte) (int, error) {
 
 // readResponse returns a complete response buffer after performing some command-specific
 // actions.
-func (t *Transport) readResponse() ([]byte, error) {
+func (t *Transport) readResponse() (p []byte, err error) {
 	if t.currentCmd == nil {
 		return nil, errors.New("a response is not expected (the command context has not been set)")
 	}
@@ -374,6 +407,9 @@ func (t *Transport) readResponse() ([]byte, error) {
 		// we're expecting a response handle
 		pHandle = &rHandle
 	}
+	// We don't pass the bytes.Buffer directly to tpm2.ReadResponsePacket here because we
+	// need the response packet to remain in the unread portion before applying any filters
+	// and subsequently returning the response packet bytes.
 	rc, rpBytes, rAuthArea, err := tpm2.ReadResponsePacket(bytes.NewReader(rsp.Bytes()), pHandle)
 	if err != nil {
 		return nil, fmt.Errorf("cannot unmarshal response packet: %w", err)
@@ -395,10 +431,22 @@ func (t *Transport) readResponse() ([]byte, error) {
 		})
 	}
 
+	applyResponseFilters := func(buf *bytes.Buffer) error {
+		if t.ResponseIntercept != nil {
+			t.ResponseIntercept(cmd.code, cmd.handles, cmd.authArea, cmd.pBytes, buf)
+		}
+		if t.responseFilterHead != nil {
+			if err := t.responseFilterHead(cmd.code, cmd.handles, cmd.authArea, cmd.pBytes, buf); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
 	if rc != tpm2.ResponseSuccess {
 		// The TPM returned an error response, so there's nothing else to do
-		if t.ResponseIntercept != nil {
-			t.ResponseIntercept(cmd.code, cmd.handles, cmd.authArea, cmd.pBytes, rsp)
+		if err := applyResponseFilters(rsp); err != nil {
+			return nil, fmt.Errorf("cannot process response filters: %w", err)
 		}
 		return rsp.Bytes(), nil
 	}
@@ -585,8 +633,8 @@ func (t *Transport) readResponse() ([]byte, error) {
 		t.didUpdatePcrAllocation = true
 	}
 
-	if t.ResponseIntercept != nil {
-		t.ResponseIntercept(cmd.code, cmd.handles, cmd.authArea, cmd.pBytes, rsp)
+	if err := applyResponseFilters(rsp); err != nil {
+		return nil, fmt.Errorf("cannot process response filters: %w", err)
 	}
 	return rsp.Bytes(), nil
 }
@@ -626,6 +674,14 @@ func (t *Transport) isDAExcempt(handle tpm2.Handle) (bool, error) {
 func (t *Transport) sendCommand(data []byte) (int, error) {
 	if t.currentCmd != nil {
 		return 0, errors.New("a previous command did not complete successfully (the command context was not cleared)")
+	}
+
+	if t.commandFilterHead != nil {
+		buf := bytes.NewBuffer(data)
+		if err := t.commandFilterHead(buf); err != nil {
+			return 0, fmt.Errorf("cannot process command filters: %w", err)
+		}
+		data = buf.Bytes()
 	}
 
 	var hdr tpm2.CommandHeader
@@ -1173,6 +1229,110 @@ func (t *Transport) Close() (err error) {
 // Unwrap returns the real interface that this one wraps.
 func (t *Transport) Unwrap() tpm2.Transport {
 	return t.transport
+}
+
+// PushCommandFilter pushes a callback that will be invoked before any command provided via the
+// [io.Writer] interface is sent to the underlying transport, which provides an opportunity for tests
+// to modify commands before they are sent. This pushes the callback to the end of queue, and the
+// callbacks are executed in the order in which they are added.
+//
+// A callback can modify the command by making changes to the supplied command [bytes.Buffer]. It can
+// return a non-nil error in order to generate an error from the [io.Writer] implementation.
+//
+// It returns a callback that can be executed in order to remove the added callback. This must be called
+// in the reverse order in which callbacks are added, else a panic occurs.
+func (t *Transport) PushCommandFilter(fn CommandFilter) (pop func()) {
+	// Retain the existing filter head and current filter length.
+	orig := t.commandFilterHead
+	index := t.commandFilterLength
+
+	// Set the new filter head to a function that calls the new filter
+	// and then chains to the previous filter head.
+	t.commandFilterHead = func(cmd *bytes.Buffer) error {
+		if err := fn(cmd); err != nil {
+			return fmt.Errorf("command filter %d returned an error: %w", index, err)
+		}
+		if orig == nil {
+			return nil
+		}
+		return orig(cmd)
+	}
+
+	// Increment the new length of filters.
+	t.commandFilterLength += 1
+
+	enabled := true
+	return func() {
+		if !enabled {
+			// Permit the function to be a no-op if called more than once.
+			return
+		}
+
+		// Ensure that pop() methods are called in the correct order. Decrementing
+		// the current filter length should result in a value that matches the
+		// filter length when this filter was registered.
+		restoredLength := t.commandFilterLength - 1
+		if restoredLength != index {
+			panic("Transport.PushCommandFilter invocation popped out of order")
+		}
+
+		// Restore the original filter head and filter length.
+		t.commandFilterHead = orig
+		t.commandFilterLength = restoredLength
+		enabled = false
+	}
+}
+
+// PushResponseFilter pushes a callback that will be invoked before any response is provided via the
+// [io.Reader] interface to the client, which provides an opportunity for tests to modify responses
+// before they are received. This pushes the callback to the end of queue, and the callbacks are executed
+// in the order in which they are added.
+//
+// A callback can modify the response by making changes to the supplied response [bytes.Buffer]. It can
+// return a non-nil error in order to generate an error from the [io.Reader] implementation.
+//
+// It returns a callback that can be executed in order to remove the added callback. This must be called
+// in the reverse order in which callbacks are added, else a panic occurs.
+func (t *Transport) PushResponseFilter(fn ResponseFilter) (pop func()) {
+	// Retain the existing filter head and current filter length.
+	orig := t.responseFilterHead
+	index := t.responseFilterLength
+
+	// Set the new filter head to a function that calls the new filter
+	// and then chains to the previous filter head.
+	t.responseFilterHead = func(cmdCode tpm2.CommandCode, cmdHandles tpm2.HandleList, cmdAuthArea []tpm2.AuthCommand, cpBytes []byte, rsp *bytes.Buffer) error {
+		if err := fn(cmdCode, cmdHandles, cmdAuthArea, cpBytes, rsp); err != nil {
+			return fmt.Errorf("response filter %d returned an error: %w", index, err)
+		}
+		if orig == nil {
+			return nil
+		}
+		return orig(cmdCode, cmdHandles, cmdAuthArea, cpBytes, rsp)
+	}
+
+	// Increment the new length of filters.
+	t.responseFilterLength += 1
+
+	enabled := true
+	return func() {
+		if !enabled {
+			// Permit the function to be a no-op if called more than once.
+			return
+		}
+
+		// Ensure that pop() methods are called in the correct order. Decrementing
+		// the current filter length should result in a value that matches the
+		// filter length when this filter was registered.
+		restoredLength := t.responseFilterLength - 1
+		if restoredLength != index {
+			panic("Transport.PushResponseFilter invocation popped out of order")
+		}
+
+		// Restore the original filter head and filter length.
+		t.responseFilterHead = orig
+		t.responseFilterLength = restoredLength
+		enabled = false
+	}
 }
 
 // WrapTCTI wraps the supplied transport and authorizes it to use the specified features. If
