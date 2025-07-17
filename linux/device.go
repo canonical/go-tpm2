@@ -62,7 +62,7 @@ func (r *nonBlockingTpmFileReader) Read(data []byte) (int, error) {
 
 type tpmDevices struct {
 	once    sync.Once
-	devices []*RawDevice
+	devices []*DirectDevice
 	err     error
 }
 
@@ -223,12 +223,18 @@ func (d *Device) String() string {
 
 // TPMDeviceRaw represents a raw Linux TPM character device.
 //
-// Deprecated: use [RawDevice].
-type TPMDeviceRaw = RawDevice
+// Deprecated: use [DirectDevice].
+type TPMDeviceRaw = DirectDevice
 
-// RawDevice represents a raw Linux TPM character device. It is safe to use this
-// from multiple goroutines simultaneously.
-type RawDevice struct {
+// RawDevice represents a raw Linux TPM character device.
+//
+// Deprecated: use [DirectDevice].
+type RawDevice = DirectDevice
+
+// DirectDevice represents a direct Linux TPM character device. These devices don't
+// use the kernel's resource manager. It is safe to use this from multiple goroutines
+// simultaneously.
+type DirectDevice struct {
 	Device
 	devno int
 
@@ -247,7 +253,7 @@ type RawDevice struct {
 // If no implementation is supported, an [ErrNoPhysicalPresenceInterface] error
 // will be returned. Calling this function will always return either a pointer to
 // the same interface or the same error for the lifetime of a process.
-func (d *RawDevice) PhysicalPresenceInterface() (ppi.PPI, error) {
+func (d *DirectDevice) PhysicalPresenceInterface() (ppi.PPI, error) {
 	d.ppiOnce.Do(func() {
 		d.ppi, d.ppiErr = func() (ppi.PPI, error) {
 			requestedPpiType, requestedPpiTypeSet := loadForcedPpiType()
@@ -347,7 +353,7 @@ func (d *RawDevice) PhysicalPresenceInterface() (ppi.PPI, error) {
 // is available. If there isn't one, a [ErrNoResourceManagedDevice] error is returned.
 // Calling  this function will always return either a pointer to the same interface or
 // the same error for the lifetime of a process.
-func (d *RawDevice) ResourceManagedDevice() (*RMDevice, error) {
+func (d *DirectDevice) ResourceManagedDevice() (*RMDevice, error) {
 	d.rmOnce.Do(func() {
 		d.rm, d.rmErr = func() (*RMDevice, error) {
 			if d.version != TPMVersion2 {
@@ -386,11 +392,11 @@ type TPMDeviceRM = RMDevice
 // resource manager. It is safe to use this from multiple goroutines simultaneously.
 type RMDevice struct {
 	Device
-	raw *RawDevice
+	raw *DirectDevice
 }
 
-// RawDevice returns the corresponding raw device.
-func (d *RMDevice) RawDevice() *RawDevice {
+// DirectDevice returns the corresponding raw device.
+func (d *RMDevice) DirectDevice() *DirectDevice {
 	return d.raw
 }
 
@@ -399,7 +405,7 @@ func (d *RMDevice) RawDevice() *RawDevice {
 // can be passed to tpm2.NewTPMContext. Failure to open the TPM character device
 // will result in a *os.PathError being returned.
 //
-// Deprecated: Use [RawDevice] and [RMDevice].
+// Deprecated: Use [DirectDevice] and [RMDevice].
 func OpenDevice(path string) (*Transport, error) {
 	device := &Device{path: path}
 	tcti, err := device.openInternal()
@@ -456,7 +462,7 @@ func tpmDeviceVersion(path string) (TPMMajorVersion, error) {
 	}
 }
 
-func probeTpmDevices() (out []*RawDevice, err error) {
+func probeTpmDevices() (out []*DirectDevice, err error) {
 	class := filepath.Join(sysfsPath, "class/tpm")
 
 	f, err := os.Open(class)
@@ -489,7 +495,7 @@ func probeTpmDevices() (out []*RawDevice, err error) {
 			return nil, fmt.Errorf("cannot determine version of TPM device at %s: %w", sysfsPath, err)
 		}
 
-		out = append(out, &RawDevice{
+		out = append(out, &DirectDevice{
 			Device: Device{
 				path:      filepath.Join(devPath, entry.Name()),
 				sysfsPath: sysfsPath,
@@ -508,7 +514,7 @@ func probeTpmDevices() (out []*RawDevice, err error) {
 // devices, regardless of version. Calling this function always returns the same
 // slice or the same error for the lifetime of a process. It is safe to call this
 // function from multiple goroutines simultaneously.
-func ListTPMDevices() (out []*RawDevice, err error) {
+func ListTPMDevices() (out []*DirectDevice, err error) {
 	devices.once.Do(func() {
 		devices.devices, devices.err = probeTpmDevices()
 	})
@@ -518,7 +524,7 @@ func ListTPMDevices() (out []*RawDevice, err error) {
 // ListTPMDevices returns a list of all TPM2 devices. Calling this function always
 // returns the same slice or the same error for the lifetime of a process. It is
 // safe to call this function from multiple goroutines simultaneously.
-func ListTPM2Devices() (out []*RawDevice, err error) {
+func ListTPM2Devices() (out []*DirectDevice, err error) {
 	candidates, err := ListTPMDevices()
 	if err != nil {
 		return nil, err
@@ -538,7 +544,7 @@ func ListTPM2Devices() (out []*RawDevice, err error) {
 // returns a pointer to the same device or the same error for the lifetime of
 // a process. It is safe to call this function from multiple goroutines
 // simultaneously.
-func DefaultTPMDevice() (*RawDevice, error) {
+func DefaultTPMDevice() (*DirectDevice, error) {
 	devices, err := ListTPMDevices()
 	if err != nil {
 		return nil, err
@@ -555,7 +561,7 @@ func DefaultTPMDevice() (*RawDevice, error) {
 // function always returns a pointer to the same device or the same error for the
 // lifetime of a process. It is safe to call this function from multiple goroutines
 // simultaneously.
-func DefaultTPM2Device() (*RawDevice, error) {
+func DefaultTPM2Device() (*DirectDevice, error) {
 	device, err := DefaultTPMDevice()
 	if err != nil {
 		return nil, err

@@ -24,8 +24,8 @@ func MockEFIVars(vars efi.VarsBackend) (restore func()) {
 	}
 }
 
-func NewMockRawDevice(path, sysfsPath string, version TPMMajorVersion, devno int) *RawDevice {
-	return &RawDevice{
+func NewMockDirectDevice(path, sysfsPath string, version TPMMajorVersion, devno int) *DirectDevice {
+	return &DirectDevice{
 		Device: Device{
 			path:      path,
 			sysfsPath: sysfsPath,
@@ -34,7 +34,7 @@ func NewMockRawDevice(path, sysfsPath string, version TPMMajorVersion, devno int
 	}
 }
 
-func NewMockRMDevice(path, sysfsPath string, version TPMMajorVersion, raw *RawDevice) *RMDevice {
+func NewMockRMDevice(path, sysfsPath string, version TPMMajorVersion, raw *DirectDevice) *RMDevice {
 	return &RMDevice{
 		Device: Device{
 			path:      path,
