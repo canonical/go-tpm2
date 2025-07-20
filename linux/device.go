@@ -92,23 +92,25 @@ type Device struct {
 	sysfsPath string
 	version   TPMMajorVersion
 
-	prsOnce              sync.Once
-	partialReadSupported bool
+	prsOnce                    sync.Once
+	devicePartialReadSupported bool
 
-	mrsOnce sync.Once
-	mrs     uint32
+	mrsOnce               sync.Once
+	deviceMaxResponseSize uint32
 }
 
-func (d *Device) checkPartialReadSupport() {
+func (d *Device) partialReadSupported(f *os.File) bool {
 	d.prsOnce.Do(func() {
-		d.partialReadSupported = func() bool {
-			f, err := os.OpenFile(d.path, os.O_RDWR, 0)
-			if err != nil {
-				return false
+		d.devicePartialReadSupported = func() bool {
+			if f == nil {
+				var err error
+				f, err = os.OpenFile(d.path, os.O_RDWR, 0)
+				if err != nil {
+					return false
+				}
+				defer f.Close()
 			}
-
 			tf := &tpmFile{file: f}
-			defer tf.Close()
 
 			cmd := tpm2.MustMarshalCommandPacket(
 				tpm2.CommandGetCapability, nil, nil,
@@ -139,6 +141,8 @@ func (d *Device) checkPartialReadSupport() {
 			return true
 		}()
 	})
+
+	return d.devicePartialReadSupported
 }
 
 type dummyDevice struct {
@@ -156,7 +160,7 @@ func (d *dummyDevice) String() string {
 
 func (d *Device) maxResponseSize(f *os.File) uint32 {
 	d.mrsOnce.Do(func() {
-		d.mrs = func() uint32 {
+		d.deviceMaxResponseSize = func() uint32 {
 			tpm, err := tpm2.OpenTPMDevice(&dummyDevice{d: d, f: f})
 			if err != nil {
 				return maxResponseSize
@@ -169,23 +173,22 @@ func (d *Device) maxResponseSize(f *os.File) uint32 {
 			return sz
 		}()
 	})
-	return d.mrs
+	return d.deviceMaxResponseSize
 }
 
 func (d *Device) openInternal() (*Transport, error) {
-	d.checkPartialReadSupport()
-
 	f, err := os.OpenFile(d.path, os.O_RDWR, 0)
 	if err != nil {
 		return nil, err
 	}
 
-	var mrs uint32
-	if !d.partialReadSupported {
-		mrs = d.maxResponseSize(f)
+	partialReadSupported := d.partialReadSupported(f)
+	var maxResponseSize uint32
+	if !partialReadSupported {
+		maxResponseSize = d.maxResponseSize(f)
 	}
 
-	return newTransport(&tpmFile{file: f}, d.partialReadSupported, mrs), nil
+	return newTransport(&tpmFile{file: f}, partialReadSupported, maxResponseSize), nil
 }
 
 // Path returns the path of the character device.
@@ -206,8 +209,7 @@ func (d *Device) MajorVersion() TPMMajorVersion {
 // PartialReadSupported indicates whether the TPM character device supports
 // partial reads.
 func (d *Device) PartialReadSupported() bool {
-	d.checkPartialReadSupport()
-	return d.partialReadSupported
+	return d.partialReadSupported(nil)
 }
 
 // Open implements [tpm2.TPMDevice.Open]. The returned transport cannot be used from multiple
