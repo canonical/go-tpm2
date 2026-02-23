@@ -134,7 +134,7 @@ type policyExecuteRunner struct {
 	ignoreAuthorizations []PolicyAuthorizationID
 	ignoreNV             []Named
 
-	wildcardResolver *policyPathWildcardResolver
+	pathChooser *policyPathChooser
 
 	remaining   policyBranchPath
 	currentPath policyBranchPath
@@ -154,7 +154,7 @@ func newPolicyExecuteRunner(session PolicySession, tickets *executePolicyTickets
 		usage:                params.Usage,
 		ignoreAuthorizations: params.IgnoreAuthorizations,
 		ignoreNV:             params.IgnoreNV,
-		wildcardResolver:     newPolicyPathWildcardResolver(session.HashAlg(), resources, tpm, params.Usage, params.IgnoreAuthorizations, params.IgnoreNV),
+		pathChooser:          newPolicyPathChooser(session.HashAlg(), resources, tpm, params.Usage, params.IgnoreAuthorizations, params.IgnoreNV),
 		remaining:            policyBranchPath(params.Path),
 	}
 }
@@ -401,7 +401,7 @@ func (r *policyExecuteRunner) selectBranch(branches policyBranches) (int, string
 	if len(next) == 0 || next[0] == '*' {
 		// There are no more components or the next component is a wildcard match - build a
 		// list of candidate paths for this subtree
-		path, err := r.wildcardResolver.resolve(branches)
+		path, err := r.pathChooser.choose(branches)
 		if err != nil {
 			return 0, "", fmt.Errorf("cannot automatically select branch: %w", err)
 		}

@@ -13,26 +13,26 @@ import (
 	"github.com/canonical/go-tpm2/mu"
 )
 
-type policyPathResolverTreeWalkerResult struct {
+type policyPathChooserTreeWalkerResult struct {
 	paths             []policyBranchPath                       // ordered collection of paths
 	details           map[policyBranchPath]PolicyBranchDetails // map of details collected for each path
 	missingAuthorized map[policyBranchPath]struct{}            // map of each collected path with missing authorized policies
 }
 
-type policyPathResolverTreeWalkerBranchContext struct {
-	nodeCtx           *policyPathResolverTreeWalkerBranchNodeContext
+type policyPathChooserTreeWalkerBranchContext struct {
+	nodeCtx           *policyPathChooserTreeWalkerBranchNodeContext
 	policySession     *recorderPolicySession
 	path              policyBranchPath
 	missingAuthorized bool
 	details           PolicyBranchDetails
 }
 
-func (c *policyPathResolverTreeWalkerBranchContext) session() policySession {
+func (c *policyPathChooserTreeWalkerBranchContext) session() policySession {
 	return c.policySession
 }
 
-func (c *policyPathResolverTreeWalkerBranchContext) beginBranchNode() (treeWalkerBranchNodeContext, error) {
-	return &policyPathResolverTreeWalkerBranchNodeContext{
+func (c *policyPathChooserTreeWalkerBranchContext) beginBranchNode() (treeWalkerBranchNodeContext, error) {
+	return &policyPathChooserTreeWalkerBranchNodeContext{
 		branchCtx: c,
 		alg:       c.nodeCtx.alg,
 		path:      c.path,
@@ -41,7 +41,7 @@ func (c *policyPathResolverTreeWalkerBranchContext) beginBranchNode() (treeWalke
 	}, nil
 }
 
-func (c *policyPathResolverTreeWalkerBranchContext) completeFullPath() error {
+func (c *policyPathChooserTreeWalkerBranchContext) completeFullPath() error {
 	result := c.nodeCtx.result
 	result.paths = append(result.paths, c.path)
 	result.details[c.path] = c.details
@@ -51,16 +51,16 @@ func (c *policyPathResolverTreeWalkerBranchContext) completeFullPath() error {
 	return nil
 }
 
-type policyPathResolverTreeWalkerBranchNodeContext struct {
-	branchCtx *policyPathResolverTreeWalkerBranchContext
+type policyPathChooserTreeWalkerBranchNodeContext struct {
+	branchCtx *policyPathChooserTreeWalkerBranchContext
 	alg       tpm2.HashAlgorithmId
 	path      policyBranchPath
 	details   PolicyBranchDetails
-	result    *policyPathResolverTreeWalkerResult
+	result    *policyPathChooserTreeWalkerResult
 }
 
-func (c *policyPathResolverTreeWalkerBranchNodeContext) beginBranch(name string) (treeWalkerBranchContext, error) {
-	branchCtx := &policyPathResolverTreeWalkerBranchContext{
+func (c *policyPathChooserTreeWalkerBranchNodeContext) beginBranch(name string) (treeWalkerBranchContext, error) {
+	branchCtx := &policyPathChooserTreeWalkerBranchContext{
 		nodeCtx: c,
 		path:    c.path.Concat(name),
 		details: c.details,
@@ -76,8 +76,8 @@ func (c *policyPathResolverTreeWalkerBranchNodeContext) beginBranch(name string)
 	return branchCtx, nil
 }
 
-// policyPathWildcardResolver attempts to automatically select a sequence of paths to execute.
-type policyPathWildcardResolver struct {
+// policyPathChooser attempts to automatically select a sequence of paths to execute.
+type policyPathChooser struct {
 	mockPolicyResources
 
 	sessionAlg           tpm2.HashAlgorithmId
@@ -87,13 +87,13 @@ type policyPathWildcardResolver struct {
 	ignoreAuthorizations []PolicyAuthorizationID
 	ignoreNV             []Named
 
-	// These fields are reset on each call to resolve.
-	walkResult  *policyPathResolverTreeWalkerResult
+	// These fields are reset on each call to choose
+	walkResult  *policyPathChooserTreeWalkerResult
 	nvCheckedOk map[nvAssertionMapKey]struct{} // map of PolicyNV assertions that would succeed
 }
 
-func newPolicyPathWildcardResolver(sessionAlg tpm2.HashAlgorithmId, resources *executePolicyResources, tpm TPMHelper, usage *PolicySessionUsage, ignoreAuthorizations []PolicyAuthorizationID, ignoreNV []Named) *policyPathWildcardResolver {
-	return &policyPathWildcardResolver{
+func newPolicyPathChooser(sessionAlg tpm2.HashAlgorithmId, resources *executePolicyResources, tpm TPMHelper, usage *PolicySessionUsage, ignoreAuthorizations []PolicyAuthorizationID, ignoreNV []Named) *policyPathChooser {
+	return &policyPathChooser{
 		sessionAlg:           sessionAlg,
 		resources:            resources,
 		tpm:                  tpm,
@@ -104,7 +104,7 @@ func newPolicyPathWildcardResolver(sessionAlg tpm2.HashAlgorithmId, resources *e
 }
 
 // filterInvalidBranches removes branches that are definitely invalid.
-func (s *policyPathWildcardResolver) filterInvalidBranches() {
+func (s *policyPathChooser) filterInvalidBranches() {
 	// iterate over each execution path
 	for p, d := range s.walkResult.details {
 		if d.IsValid() {
@@ -116,7 +116,7 @@ func (s *policyPathWildcardResolver) filterInvalidBranches() {
 
 // filterIgnoredResources removes branches that require resources that the caller
 // requested to not be used.
-func (s *policyPathWildcardResolver) filterIgnoredResources() {
+func (s *policyPathChooser) filterIgnoredResources() {
 	for _, ignore := range s.ignoreAuthorizations {
 		// iterate over each execution path
 		for p, d := range s.walkResult.details {
@@ -154,7 +154,7 @@ func (s *policyPathWildcardResolver) filterIgnoredResources() {
 // filterMissingAuthorizedBranches removes branches that contain TPM2_PolicyAuthorize
 // assertions with no candidate authorized policies returned from the supplied
 // PolicyResources.
-func (s *policyPathWildcardResolver) filterMissingAuthorizedBranches() {
+func (s *policyPathChooser) filterMissingAuthorizedBranches() {
 	// iterate over each execution path
 	for p := range s.walkResult.details {
 		if _, missing := s.walkResult.missingAuthorized[p]; missing {
@@ -165,7 +165,7 @@ func (s *policyPathWildcardResolver) filterMissingAuthorizedBranches() {
 
 // filterUsageIncompatibleBranches removes branches that are not compatible with
 // the specified session usage, if it is supplied.
-func (s *policyPathWildcardResolver) filterUsageIncompatibleBranches() error {
+func (s *policyPathChooser) filterUsageIncompatibleBranches() error {
 	if s.usage == nil {
 		return nil
 	}
@@ -239,7 +239,7 @@ func (s *policyPathWildcardResolver) filterUsageIncompatibleBranches() error {
 
 // filterPcrIncompatibleBranches removes branches that contain TPM2_PolicyPCR
 // assertions with values which don't match the current PCR values.
-func (s *policyPathWildcardResolver) filterPcrIncompatibleBranches() error {
+func (s *policyPathChooser) filterPcrIncompatibleBranches() error {
 	// Build a list of PCR selections from the paths
 	var pcrs tpm2.PCRSelectionList
 	// iterate over each execution path
@@ -288,7 +288,7 @@ func (s *policyPathWildcardResolver) filterPcrIncompatibleBranches() error {
 	return nil
 }
 
-func (s *policyPathWildcardResolver) bufferMatch(operandA, operandB tpm2.Operand, operation tpm2.ArithmeticOp) bool {
+func (s *policyPathChooser) bufferMatch(operandA, operandB tpm2.Operand, operation tpm2.ArithmeticOp) bool {
 	if len(operandA) != len(operandB) {
 		panic("mismatched operand sizes")
 	}
@@ -361,7 +361,7 @@ func (s *policyPathWildcardResolver) bufferMatch(operandA, operandB tpm2.Operand
 	}
 }
 
-func (s *policyPathWildcardResolver) canAuthNV(pub *tpm2.NVPublic, policy *Policy, command tpm2.CommandCode) bool {
+func (s *policyPathChooser) canAuthNV(pub *tpm2.NVPublic, policy *Policy, command tpm2.CommandCode) bool {
 	if pub.Attrs&tpm2.AttrNVPolicyRead == 0 {
 		return false
 	}
@@ -440,7 +440,7 @@ const (
 // that will fail. This ignores assertions where it's not possible to determine the current
 // NV index contents because it requires authorization to read. It populates the nvCheckedOk
 // map for assertions that were checked to be good.
-func (s *policyPathWildcardResolver) filterNVIncompatibleBranches() error {
+func (s *policyPathChooser) filterNVIncompatibleBranches() error {
 	nvResult := make(map[nvAssertionMapKey]nvAssertionStatus) // a map of assertion IDs to status
 	nvInfo := make(map[tpm2.Handle]*nvIndexInfo)              // a map of handles to information about the corresponding index
 
@@ -590,7 +590,7 @@ func (s *policyPathWildcardResolver) filterNVIncompatibleBranches() error {
 
 // filterCounterTimerIncompatibleBranches removes branches that contain TPM2_PolicyCounterTimer
 // assertions that will fail.
-func (s *policyPathWildcardResolver) filterCounterTimerIncompatibleBranches() error {
+func (s *policyPathChooser) filterCounterTimerIncompatibleBranches() error {
 	// determine whether any paths use TPM2_PolicyCounterTimer
 	hasCounterTimerAssertions := false
 	// iterate over each execution path
@@ -656,29 +656,29 @@ func (s *policyPathWildcardResolver) filterCounterTimerIncompatibleBranches() er
 	return nil
 }
 
-type policyPathWildcardResolverTreeWalkError struct {
+type policyPathChooserTreeWalkError struct {
 	err error
 }
 
-func (e *policyPathWildcardResolverTreeWalkError) Error() string {
+func (e *policyPathChooserTreeWalkError) Error() string {
 	return fmt.Sprintf("cannot perform tree walk: %v", e.err)
 }
 
-func (e *policyPathWildcardResolverTreeWalkError) Unwrap() error {
+func (e *policyPathChooserTreeWalkError) Unwrap() error {
 	return e.err
 }
 
-func (*policyPathWildcardResolverTreeWalkError) isPolicyDelimiterError() {}
+func (*policyPathChooserTreeWalkError) isPolicyDelimiterError() {}
 
-func (s *policyPathWildcardResolver) resolve(branches policyBranches) (policyBranchPath, error) {
+func (s *policyPathChooser) choose(branches policyBranches) (policyBranchPath, error) {
 	// reset state
-	s.walkResult = &policyPathResolverTreeWalkerResult{
+	s.walkResult = &policyPathChooserTreeWalkerResult{
 		details:           make(map[policyBranchPath]PolicyBranchDetails),
 		missingAuthorized: make(map[policyBranchPath]struct{}),
 	}
 	s.nvCheckedOk = make(map[nvAssertionMapKey]struct{})
 
-	walker := newTreeWalker(s, &policyPathResolverTreeWalkerBranchNodeContext{
+	walker := newTreeWalker(s, &policyPathChooserTreeWalkerBranchNodeContext{
 		alg:    s.sessionAlg,
 		result: s.walkResult,
 	})
@@ -690,7 +690,7 @@ func (s *policyPathWildcardResolver) resolve(branches policyBranches) (policyBra
 			},
 		},
 	}); err != nil {
-		return "", &policyPathWildcardResolverTreeWalkError{err: err}
+		return "", &policyPathChooserTreeWalkError{err: err}
 	}
 
 	// Drop incompatible paths
