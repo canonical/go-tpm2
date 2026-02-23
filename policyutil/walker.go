@@ -13,16 +13,10 @@ import (
 
 var errTreeWalkerSkipBranch = errors.New("")
 
-type (
-	treeWalkerBeginBranchNodeFn  func() (treeWalkerBeginBranchFn, error)
-	treeWalkerBeginBranchFn      func(string) (policySession, treeWalkerBeginBranchNodeFn, treeWalkerCompleteFullPathFn, error)
-	treeWalkerCompleteFullPathFn func() error
-)
-
 type treeWalkerCompleteFullPathRunner struct {
-	walker *treeWalker
-	depth  int
-	fn     treeWalkerCompleteFullPathFn
+	walker    *treeWalker
+	depth     int
+	branchCtx treeWalkerBranchContext
 }
 
 func (treeWalkerCompleteFullPathRunner) name() string { return "complete full path" }
@@ -31,7 +25,7 @@ func (r treeWalkerCompleteFullPathRunner) run(_ policyRunner) error {
 	if r.walker.depth != r.depth {
 		return nil
 	}
-	return r.fn()
+	return r.branchCtx.completeFullPath()
 }
 
 type treeWalkerPolicyAuthorizeRunner struct {
@@ -47,34 +41,53 @@ func (r *treeWalkerPolicyAuthorizeRunner) run(runner policyRunner) error {
 	return runner.session().PolicyAuthorize(nil, r.policyRef, r.keySign.Name(), nil)
 }
 
+// treeWalkerBranchContext allows the caller to associate context with
+// a branch.
+type treeWalkerBranchContext interface {
+	session() policySession
+
+	// beginBranchNode is called when a new branch node is encountered.
+	beginBranchNode() (treeWalkerBranchNodeContext, error)
+
+	// completeFullPath is called when there are no more elements in
+	// this path. This is only called on the last branch of a path.
+	completeFullPath() error
+}
+
+// treeWalkerBranchNodeContext allows the caller to associate context
+// with a branch node.
+type treeWalkerBranchNodeContext interface {
+	// beginBranch is called when entering a new branch.
+	beginBranch(name string) (treeWalkerBranchContext, error)
+}
+
 // treeWalker walks every path of elements in a policy, or from a single branch node.
 type treeWalker struct {
 	policyTickets     nullTickets
 	policyResources   policyResources
-	beginRootBranchFn treeWalkerBeginBranchFn
+	rootBranchNodeCtx treeWalkerBranchNodeContext
 
-	currentPath       policyBranchPath
-	policySession     policySession
-	beginBranchNodeFn treeWalkerBeginBranchNodeFn
-	depth             int
+	currentPath policyBranchPath
+	branchCtx   treeWalkerBranchContext
+	depth       int
 
 	remaining []policyElementRunner
 }
 
-func newTreeWalker(resources policyResources, beginRootBranchFn treeWalkerBeginBranchFn) *treeWalker {
+func newTreeWalker(resources policyResources, rootBranchNodeCtx treeWalkerBranchNodeContext) *treeWalker {
 	return &treeWalker{
 		policyResources:   resources,
-		beginRootBranchFn: beginRootBranchFn,
+		rootBranchNodeCtx: rootBranchNodeCtx,
 	}
 }
 
-func (w *treeWalker) walkBranch(beginBranchFn treeWalkerBeginBranchFn, index int, branch *policyBranch, remaining []policyElementRunner) error {
+func (w *treeWalker) walkBranch(branchNodeCtx treeWalkerBranchNodeContext, index int, branch *policyBranch, remaining []policyElementRunner) error {
 	name := string(branch.Name)
 	if len(name) == 0 {
 		name = fmt.Sprintf("{%d}", index)
 	}
 
-	session, beginBranchNodeFn, completeFullPathFn, err := beginBranchFn(name)
+	branchCtx, err := branchNodeCtx.beginBranch(name)
 	if err != nil {
 		if err == errTreeWalkerSkipBranch {
 			return nil
@@ -82,18 +95,15 @@ func (w *treeWalker) walkBranch(beginBranchFn treeWalkerBeginBranchFn, index int
 		return fmt.Errorf("cannot begin branch: %w", err)
 	}
 
-	origSession := w.policySession
-	origBeginBranchNodeFn := w.beginBranchNodeFn
+	origBranchCtx := w.branchCtx
 	origPath := w.currentPath
 	defer func() {
-		w.policySession = origSession
-		w.beginBranchNodeFn = origBeginBranchNodeFn
+		w.branchCtx = origBranchCtx
 		w.currentPath = origPath
 		w.depth--
 	}()
 
-	w.policySession = session
-	w.beginBranchNodeFn = beginBranchNodeFn
+	w.branchCtx = branchCtx
 	w.currentPath = w.currentPath.Concat(name)
 	w.depth++
 
@@ -101,12 +111,12 @@ func (w *treeWalker) walkBranch(beginBranchFn treeWalkerBeginBranchFn, index int
 	for _, element := range branch.Policy {
 		elements = append(elements, element.runner())
 	}
-	remaining = append(remaining, &treeWalkerCompleteFullPathRunner{walker: w, depth: w.depth, fn: completeFullPathFn})
+	remaining = append(remaining, &treeWalkerCompleteFullPathRunner{walker: w, depth: w.depth, branchCtx: branchCtx})
 	return w.runInternal(append(elements, remaining...))
 }
 
 func (w *treeWalker) session() policySession {
-	return w.policySession
+	return w.branchCtx.session()
 }
 
 func (w *treeWalker) tickets() policyTickets {
@@ -147,13 +157,13 @@ func (w *treeWalker) runBranch(branches policyBranches) (int, error) {
 	remaining := w.remaining
 	w.remaining = nil
 
-	beginBranchFn, err := w.beginBranchNodeFn()
+	branchNodeCtx, err := w.branchCtx.beginBranchNode()
 	if err != nil {
 		return 0, fmt.Errorf("cannot begin branch node: %w", err)
 	}
 
 	for i, branch := range branches {
-		if err := w.walkBranch(beginBranchFn, i, branch, remaining); err != nil {
+		if err := w.walkBranch(branchNodeCtx, i, branch, remaining); err != nil {
 			return 0, fmt.Errorf("cannot walk branch %d: %w", i, err)
 		}
 	}
@@ -170,19 +180,19 @@ func (w *treeWalker) runAuthorizedPolicy(keySign *tpm2.Public, policyRef tpm2.No
 		policyRef: policyRef,
 	}}, remaining...)
 
-	beginBranchFn, err := w.beginBranchNodeFn()
+	branchNodeCtx, err := w.branchCtx.beginBranchNode()
 	if err != nil {
 		return nil, nil, fmt.Errorf("cannot begin authorized policy node: %w", err)
 	}
 
 	if len(policies) > 0 {
 		for i, policy := range policies {
-			if err := w.walkBranch(beginBranchFn, i, &policy.policyBranch, remaining); err != nil {
+			if err := w.walkBranch(branchNodeCtx, i, &policy.policyBranch, remaining); err != nil {
 				return nil, nil, fmt.Errorf("cannot walk policy: %w", err)
 			}
 		}
 	} else {
-		if err := w.walkBranch(beginBranchFn, 0, &policyBranch{Name: policyBranchName(fmt.Sprintf("<authorize:key:%#x,ref:%#x>", keySign.Name(), policyRef))}, remaining); err != nil {
+		if err := w.walkBranch(branchNodeCtx, 0, &policyBranch{Name: policyBranchName(fmt.Sprintf("<authorize:key:%#x,ref:%#x>", keySign.Name(), policyRef))}, remaining); err != nil {
 			return nil, nil, fmt.Errorf("cannot walk missing policy: %w", err)
 		}
 	}
@@ -210,23 +220,21 @@ func (w *treeWalker) run(elements policyElements) error {
 	w.currentPath = ""
 	w.depth = 0
 
-	session, beginBranchNodeFn, completeFullPathFn, err := w.beginRootBranchFn("")
+	rootBranchCtx, err := w.rootBranchNodeCtx.beginBranch("")
 	if err != nil {
 		return err
 	}
 
-	w.policySession = session
-	w.beginBranchNodeFn = beginBranchNodeFn
+	w.branchCtx = rootBranchCtx
 
 	defer func() {
-		w.policySession = nil
-		w.beginBranchNodeFn = nil
+		w.branchCtx = nil
 	}()
 
 	var elementsCopy []policyElementRunner
 	for _, element := range elements {
 		elementsCopy = append(elementsCopy, element.runner())
 	}
-	elementsCopy = append(elementsCopy, &treeWalkerCompleteFullPathRunner{walker: w, depth: w.depth, fn: completeFullPathFn})
+	elementsCopy = append(elementsCopy, &treeWalkerCompleteFullPathRunner{walker: w, depth: w.depth, branchCtx: rootBranchCtx})
 	return w.runInternal(elementsCopy)
 }
