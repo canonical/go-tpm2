@@ -1306,13 +1306,15 @@ func (s *policyExecuteSuite) testPolicyAuthorizeWithSubPolicyBranches(c *C, path
 	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
 	builder.RootBranch().PolicyNvWritten(true)
 
-	node := builder.RootBranch().AddBranchNode()
+	builder.RootBranch().AddBranchNode(func(n *PolicyBuilderBranchNode) {
+		n.AddBranch("branch1", func(b *PolicyBuilderBranch) {
+			b.PolicyAuthValue()
+		})
 
-	b1 := node.AddBranch("branch1")
-	b1.PolicyAuthValue()
-
-	b2 := node.AddBranch("branch2")
-	b2.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo"))
+		n.AddBranch("branch2", func(b *PolicyBuilderBranch) {
+			b.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo"))
+		})
+	})
 
 	builder.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth)
 
@@ -1638,22 +1640,25 @@ func (s *policyExecuteSuite) testPolicyBranches(c *C, data *testExecutePolicyBra
 	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
 	builder.RootBranch().PolicyNvWritten(true)
 
-	node := builder.RootBranch().AddBranchNode()
-
-	b1 := node.AddBranch("branch1")
-	b1.PolicyAuthValue()
-
-	b2 := node.AddBranch("branch2")
-	b2.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo"))
-
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	c.Assert(err, IsNil)
 
 	pubKey, err := objectutil.NewECCPublicKey(&key.PublicKey)
 	c.Assert(err, IsNil)
 
-	b3 := node.AddBranch("branch3")
-	b3.PolicySigned(pubKey, []byte("bar"))
+	builder.RootBranch().AddBranchNode(func(n *PolicyBuilderBranchNode) {
+		n.AddBranch("branch1", func(b *PolicyBuilderBranch) {
+			b.PolicyAuthValue()
+		})
+
+		n.AddBranch("branch2", func(b *PolicyBuilderBranch) {
+			b.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo"))
+		})
+
+		n.AddBranch("branch3", func(b *PolicyBuilderBranch) {
+			b.PolicySigned(pubKey, []byte("bar"))
+		})
+	})
 
 	builder.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth)
 
@@ -1842,13 +1847,15 @@ func (s *policyExecuteSuite) TestPolicyBranchesMultipleDigests(c *C) {
 	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA1)
 	builder.RootBranch().PolicyNvWritten(true)
 
-	node := builder.RootBranch().AddBranchNode()
+	builder.RootBranch().AddBranchNode(func(n *PolicyBuilderBranchNode) {
+		n.AddBranch("branch1", func(b *PolicyBuilderBranch) {
+			b.PolicyAuthValue()
+		})
 
-	b1 := node.AddBranch("branch1")
-	b1.PolicyAuthValue()
-
-	b2 := node.AddBranch("branch2")
-	b2.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo"))
+		n.AddBranch("branch2", func(b *PolicyBuilderBranch) {
+			b.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo"))
+		})
+	})
 
 	builder.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth)
 
@@ -1898,21 +1905,25 @@ func (s *policyExecuteSuite) testPolicyBranchesMultipleNodes(c *C, data *testExe
 	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
 	builder.RootBranch().PolicyNvWritten(true)
 
-	node1 := builder.RootBranch().AddBranchNode()
+	builder.RootBranch().AddBranchNode(func(n *PolicyBuilderBranchNode) {
+		n.AddBranch("branch1", func(b *PolicyBuilderBranch) {
+			b.PolicyAuthValue()
+		})
 
-	b1 := node1.AddBranch("branch1")
-	b1.PolicyAuthValue()
+		n.AddBranch("branch2", func(b *PolicyBuilderBranch) {
+			b.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo"))
+		})
+	})
 
-	b2 := node1.AddBranch("branch2")
-	b2.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo"))
+	builder.RootBranch().AddBranchNode(func(n *PolicyBuilderBranchNode) {
+		n.AddBranch("branch3", func(b *PolicyBuilderBranch) {
+			b.PolicyCommandCode(tpm2.CommandNVChangeAuth)
+		})
 
-	node2 := builder.RootBranch().AddBranchNode()
-
-	b3 := node2.AddBranch("branch3")
-	b3.PolicyCommandCode(tpm2.CommandNVChangeAuth)
-
-	b4 := node2.AddBranch("branch4")
-	b4.PolicyCommandCode(tpm2.CommandNVWriteLock)
+		n.AddBranch("branch4", func(b *PolicyBuilderBranch) {
+			b.PolicyCommandCode(tpm2.CommandNVWriteLock)
+		})
+	})
 
 	expectedDigest, policy, err := builder.Policy()
 	c.Assert(err, IsNil)
@@ -2207,29 +2218,33 @@ func (s *policyExecuteSuite) testPolicyBranchesEmbeddedNodes(c *C, data *testExe
 	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
 	builder.RootBranch().PolicyNvWritten(true)
 
-	node1 := builder.RootBranch().AddBranchNode()
+	builder.RootBranch().AddBranchNode(func(n *PolicyBuilderBranchNode) {
+		n.AddBranch("branch1", func(b *PolicyBuilderBranch) {
+			b.PolicyAuthValue()
+			b.AddBranchNode(func(n *PolicyBuilderBranchNode) {
+				n.AddBranch("branch2", func(b *PolicyBuilderBranch) {
+					b.PolicyCommandCode(tpm2.CommandNVChangeAuth)
+				})
 
-	b1 := node1.AddBranch("branch1")
-	b1.PolicyAuthValue()
+				n.AddBranch("branch3", func(b *PolicyBuilderBranch) {
+					b.PolicyCommandCode(tpm2.CommandNVWriteLock)
+				})
+			})
+		})
 
-	node2 := b1.AddBranchNode()
+		n.AddBranch("branch4", func(b *PolicyBuilderBranch) {
+			b.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo"))
+			b.AddBranchNode(func(n *PolicyBuilderBranchNode) {
+				n.AddBranch("branch5", func(b *PolicyBuilderBranch) {
+					b.PolicyCommandCode(tpm2.CommandNVChangeAuth)
+				})
 
-	b2 := node2.AddBranch("branch2")
-	b2.PolicyCommandCode(tpm2.CommandNVChangeAuth)
-
-	b3 := node2.AddBranch("branch3")
-	b3.PolicyCommandCode(tpm2.CommandNVWriteLock)
-
-	b4 := node1.AddBranch("branch4")
-	b4.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo"))
-
-	node3 := b4.AddBranchNode()
-
-	b5 := node3.AddBranch("branch5")
-	b5.PolicyCommandCode(tpm2.CommandNVChangeAuth)
-
-	b6 := node3.AddBranch("branch6")
-	b6.PolicyCommandCode(tpm2.CommandNVWriteLock)
+				n.AddBranch("branch6", func(b *PolicyBuilderBranch) {
+					b.PolicyCommandCode(tpm2.CommandNVWriteLock)
+				})
+			})
+		})
+	})
 
 	expectedDigest, policy, err := builder.Policy()
 	c.Assert(err, IsNil)
@@ -2521,13 +2536,15 @@ func (s *policyExecuteSuite) TestPolicyBranchesSelectorOutOfRange(c *C) {
 	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
 	builder.RootBranch().PolicyNvWritten(true)
 
-	node := builder.RootBranch().AddBranchNode()
+	builder.RootBranch().AddBranchNode(func(n *PolicyBuilderBranchNode) {
+		n.AddBranch("branch1", func(b *PolicyBuilderBranch) {
+			b.PolicyAuthValue()
+		})
 
-	b1 := node.AddBranch("branch1")
-	b1.PolicyAuthValue()
-
-	b2 := node.AddBranch("branch2")
-	b2.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo"))
+		n.AddBranch("branch2", func(b *PolicyBuilderBranch) {
+			b.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo"))
+		})
+	})
 
 	builder.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth)
 
@@ -2552,13 +2569,15 @@ func (s *policyExecuteSuite) TestPolicyBranchesInvalidSelector(c *C) {
 	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
 	builder.RootBranch().PolicyNvWritten(true)
 
-	node := builder.RootBranch().AddBranchNode()
+	builder.RootBranch().AddBranchNode(func(n *PolicyBuilderBranchNode) {
+		n.AddBranch("branch1", func(b *PolicyBuilderBranch) {
+			b.PolicyAuthValue()
+		})
 
-	b1 := node.AddBranch("branch1")
-	b1.PolicyAuthValue()
-
-	b2 := node.AddBranch("branch2")
-	b2.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo"))
+		n.AddBranch("branch2", func(b *PolicyBuilderBranch) {
+			b.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo"))
+		})
+	})
 
 	builder.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth)
 
@@ -2583,13 +2602,15 @@ func (s *policyExecuteSuite) TestPolicyBranchesBranchNotFound(c *C) {
 	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
 	builder.RootBranch().PolicyNvWritten(true)
 
-	node := builder.RootBranch().AddBranchNode()
+	builder.RootBranch().AddBranchNode(func(n *PolicyBuilderBranchNode) {
+		n.AddBranch("branch1", func(b *PolicyBuilderBranch) {
+			b.PolicyAuthValue()
+		})
 
-	b1 := node.AddBranch("branch1")
-	b1.PolicyAuthValue()
-
-	b2 := node.AddBranch("branch2")
-	b2.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo"))
+		n.AddBranch("branch2", func(b *PolicyBuilderBranch) {
+			b.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo"))
+		})
+	})
 
 	builder.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth)
 
@@ -2614,13 +2635,15 @@ func (s *policyExecuteSuite) TestPolicyBranchesMissingBranchDigests(c *C) {
 	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA1)
 	builder.RootBranch().PolicyNvWritten(true)
 
-	node := builder.RootBranch().AddBranchNode()
+	builder.RootBranch().AddBranchNode(func(n *PolicyBuilderBranchNode) {
+		n.AddBranch("branch1", func(b *PolicyBuilderBranch) {
+			b.PolicyAuthValue()
+		})
 
-	b1 := node.AddBranch("branch1")
-	b1.PolicyAuthValue()
-
-	b2 := node.AddBranch("branch2")
-	b2.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo"))
+		n.AddBranch("branch2", func(b *PolicyBuilderBranch) {
+			b.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo"))
+		})
+	})
 
 	builder.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth)
 
@@ -3054,11 +3077,14 @@ func (s *policyExecuteSuite) TestPolicyORDifferentDigests(c *C) {
 
 func (s *policyExecuteSuite) TestPolicyBranchesNVAutoSelected(c *C) {
 	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
-	node := builder.RootBranch().AddBranchNode()
-	b1 := node.AddBranch("")
-	b1.PolicyCommandCode(tpm2.CommandNVRead)
-	b2 := node.AddBranch("")
-	b2.PolicyCommandCode(tpm2.CommandPolicyNV)
+	builder.RootBranch().AddBranchNode(func(n *PolicyBuilderBranchNode) {
+		n.AddBranch("", func(b *PolicyBuilderBranch) {
+			b.PolicyCommandCode(tpm2.CommandNVRead)
+		})
+		n.AddBranch("", func(b *PolicyBuilderBranch) {
+			b.PolicyCommandCode(tpm2.CommandPolicyNV)
+		})
+	})
 	digest, nvPolicy, err := builder.Policy()
 	c.Assert(err, IsNil)
 
@@ -3074,12 +3100,14 @@ func (s *policyExecuteSuite) TestPolicyBranchesNVAutoSelected(c *C) {
 	nvPub.Attrs |= tpm2.AttrNVWritten
 
 	builder = NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
-	node = builder.RootBranch().AddBranchNode()
-	b1 = node.AddBranch("")
-	b1.PolicyNV(nvPub, []byte{0}, 0, tpm2.OpNeq)
-	b2 = node.AddBranch("")
-	b2.PolicyNV(nvPub, []byte{0}, 0, tpm2.OpEq)
-
+	builder.RootBranch().AddBranchNode(func(n *PolicyBuilderBranchNode) {
+		n.AddBranch("", func(b *PolicyBuilderBranch) {
+			b.PolicyNV(nvPub, []byte{0}, 0, tpm2.OpNeq)
+		})
+		n.AddBranch("", func(b *PolicyBuilderBranch) {
+			b.PolicyNV(nvPub, []byte{0}, 0, tpm2.OpEq)
+		})
+	})
 	expectedDigest, policy, err := builder.Policy()
 	c.Assert(err, IsNil)
 
@@ -3109,11 +3137,14 @@ func (s *policyExecuteSuite) TestPolicyBranchesNVAutoSelected(c *C) {
 
 func (s *policyExecuteSuite) TestPolicyBranchesNVAutoSelectedFail(c *C) {
 	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
-	node := builder.RootBranch().AddBranchNode()
-	b1 := node.AddBranch("")
-	b1.PolicyCommandCode(tpm2.CommandNVRead)
-	b2 := node.AddBranch("")
-	b2.PolicyCommandCode(tpm2.CommandPolicyNV)
+	builder.RootBranch().AddBranchNode(func(n *PolicyBuilderBranchNode) {
+		n.AddBranch("", func(b *PolicyBuilderBranch) {
+			b.PolicyCommandCode(tpm2.CommandNVRead)
+		})
+		n.AddBranch("", func(b *PolicyBuilderBranch) {
+			b.PolicyCommandCode(tpm2.CommandPolicyNV)
+		})
+	})
 	digest, nvPolicy, err := builder.Policy()
 	c.Assert(err, IsNil)
 
@@ -3129,11 +3160,14 @@ func (s *policyExecuteSuite) TestPolicyBranchesNVAutoSelectedFail(c *C) {
 	nvPub.Attrs |= tpm2.AttrNVWritten
 
 	builder = NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
-	node = builder.RootBranch().AddBranchNode()
-	b1 = node.AddBranch("")
-	b1.PolicyNV(nvPub, []byte{0}, 0, tpm2.OpNeq)
-	b2 = node.AddBranch("")
-	b2.PolicyNV(nvPub, []byte{0}, 10, tpm2.OpEq)
+	builder.RootBranch().AddBranchNode(func(n *PolicyBuilderBranchNode) {
+		n.AddBranch("", func(b *PolicyBuilderBranch) {
+			b.PolicyNV(nvPub, []byte{0}, 0, tpm2.OpNeq)
+		})
+		n.AddBranch("", func(b *PolicyBuilderBranch) {
+			b.PolicyNV(nvPub, []byte{0}, 10, tpm2.OpEq)
+		})
+	})
 
 	_, policy, err := builder.Policy()
 	c.Assert(err, IsNil)
@@ -3176,14 +3210,15 @@ func (s *policyExecuteSuitePCR) TestPolicyBranchesAutoSelected(c *C) {
 	c.Assert(err, IsNil)
 
 	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+	builder.RootBranch().AddBranchNode(func(n *PolicyBuilderBranchNode) {
+		n.AddBranch("", func(b *PolicyBuilderBranch) {
+			b.PolicyPCRValues(tpm2.PCRValues{tpm2.HashAlgorithmSHA256: map[int]tpm2.Digest{7: pcrValues[tpm2.HashAlgorithmSHA256][7], 23: make(tpm2.Digest, 32)}})
+		})
 
-	node := builder.RootBranch().AddBranchNode()
-
-	b1 := node.AddBranch("")
-	b1.PolicyPCRValues(tpm2.PCRValues{tpm2.HashAlgorithmSHA256: map[int]tpm2.Digest{7: pcrValues[tpm2.HashAlgorithmSHA256][7], 23: make(tpm2.Digest, 32)}})
-
-	b2 := node.AddBranch("")
-	b2.PolicyPCRValues(pcrValues)
+		n.AddBranch("", func(b *PolicyBuilderBranch) {
+			b.PolicyPCRValues(pcrValues)
+		})
+	})
 
 	expectedDigest, policy, err := builder.Policy()
 	c.Assert(err, IsNil)
@@ -3218,14 +3253,15 @@ func (s *policyExecuteSuitePCR) TestPolicyBranchesAutoSelectFail(c *C) {
 	c.Assert(err, IsNil)
 
 	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+	builder.RootBranch().AddBranchNode(func(n *PolicyBuilderBranchNode) {
+		n.AddBranch("", func(b *PolicyBuilderBranch) {
+			b.PolicyPCRValues(tpm2.PCRValues{tpm2.HashAlgorithmSHA256: map[int]tpm2.Digest{7: pcrValues[tpm2.HashAlgorithmSHA256][7], 23: make(tpm2.Digest, 32)}})
+		})
 
-	node := builder.RootBranch().AddBranchNode()
-
-	b1 := node.AddBranch("")
-	b1.PolicyPCRValues(tpm2.PCRValues{tpm2.HashAlgorithmSHA256: map[int]tpm2.Digest{7: pcrValues[tpm2.HashAlgorithmSHA256][7], 23: make(tpm2.Digest, 32)}})
-
-	b2 := node.AddBranch("")
-	b2.PolicyPCRValues(pcrValues)
+		n.AddBranch("", func(b *PolicyBuilderBranch) {
+			b.PolicyPCRValues(pcrValues)
+		})
+	})
 
 	_, policy, err := builder.Policy()
 	c.Assert(err, IsNil)

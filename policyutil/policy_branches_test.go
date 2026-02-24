@@ -39,13 +39,15 @@ func (s *policyBranchesSuite) TestPolicyBranchesWithBranches(c *C) {
 	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
 	builder.RootBranch().PolicyNvWritten(true)
 
-	node := builder.RootBranch().AddBranchNode()
+	builder.RootBranch().AddBranchNode(func(n *PolicyBuilderBranchNode) {
+		n.AddBranch("branch1", func(b *PolicyBuilderBranch) {
+			b.PolicyAuthValue()
+		})
 
-	b1 := node.AddBranch("branch1")
-	b1.PolicyAuthValue()
-
-	b2 := node.AddBranch("branch2")
-	b2.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo"))
+		n.AddBranch("branch2", func(b *PolicyBuilderBranch) {
+			b.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo"))
+		})
+	})
 
 	builder.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth)
 
@@ -61,21 +63,25 @@ func (s *policyBranchesSuite) TestPolicyBranchesWithMultipleBranchNodes(c *C) {
 	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
 	builder.RootBranch().PolicyNvWritten(true)
 
-	node1 := builder.RootBranch().AddBranchNode()
+	builder.RootBranch().AddBranchNode(func(n *PolicyBuilderBranchNode) {
+		n.AddBranch("branch1", func(b *PolicyBuilderBranch) {
+			b.PolicyAuthValue()
+		})
 
-	b1 := node1.AddBranch("branch1")
-	b1.PolicyAuthValue()
+		n.AddBranch("branch2", func(b *PolicyBuilderBranch) {
+			b.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo"))
+		})
+	})
 
-	b2 := node1.AddBranch("branch2")
-	b2.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo"))
+	builder.RootBranch().AddBranchNode(func(n *PolicyBuilderBranchNode) {
+		n.AddBranch("branch3", func(b *PolicyBuilderBranch) {
+			b.PolicyCommandCode(tpm2.CommandNVChangeAuth)
+		})
 
-	node2 := builder.RootBranch().AddBranchNode()
-
-	b3 := node2.AddBranch("branch3")
-	b3.PolicyCommandCode(tpm2.CommandNVChangeAuth)
-
-	b4 := node2.AddBranch("")
-	b4.PolicyCommandCode(tpm2.CommandObjectChangeAuth)
+		n.AddBranch("", func(b *PolicyBuilderBranch) {
+			b.PolicyCommandCode(tpm2.CommandObjectChangeAuth)
+		})
+	})
 
 	_, policy, err := builder.Policy()
 	c.Assert(err, IsNil)

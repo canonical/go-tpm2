@@ -118,13 +118,15 @@ func (s *policyDetailsSuite) testPolicyDetailsWithBranches(c *C, path string) ma
 	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
 	builder.RootBranch().PolicyNvWritten(true)
 
-	node := builder.RootBranch().AddBranchNode()
+	builder.RootBranch().AddBranchNode(func(n *PolicyBuilderBranchNode) {
+		n.AddBranch("branch1", func(b *PolicyBuilderBranch) {
+			b.PolicyAuthValue()
+		})
 
-	b1 := node.AddBranch("branch1")
-	b1.PolicyAuthValue()
-
-	b2 := node.AddBranch("branch2")
-	b2.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo"))
+		n.AddBranch("branch2", func(b *PolicyBuilderBranch) {
+			b.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo"))
+		})
+	})
 
 	builder.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth)
 

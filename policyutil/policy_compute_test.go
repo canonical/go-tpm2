@@ -94,20 +94,19 @@ func (s *policyComputeSuite) TestPolicyBranchesMultipleDigests(c *C) {
 	builder = NewPolicyBuilder(tpm2.HashAlgorithmSHA1)
 	builder.RootBranch().PolicyNvWritten(true)
 
-	node := builder.RootBranch().AddBranchNode()
-	c.Assert(node, NotNil)
+	builder.RootBranch().AddBranchNode(func(n *PolicyBuilderBranchNode) {
+		n.AddBranch("branch1", func(b *PolicyBuilderBranch) {
+			digest, err = b.PolicyAuthValue()
+			c.Check(err, IsNil)
+			c.Check(digest, DeepEquals, pHashListSHA1[0])
+		})
 
-	b1 := node.AddBranch("branch1")
-	c.Assert(b1, NotNil)
-	digest, err = b1.PolicyAuthValue()
-	c.Check(err, IsNil)
-	c.Check(digest, DeepEquals, pHashListSHA1[0])
-
-	b2 := node.AddBranch("branch2")
-	c.Assert(b2, NotNil)
-	digest, err = b2.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo"))
-	c.Check(err, IsNil)
-	c.Check(digest, DeepEquals, pHashListSHA1[1])
+		n.AddBranch("branch2", func(b *PolicyBuilderBranch) {
+			digest, err = b.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo"))
+			c.Check(err, IsNil)
+			c.Check(digest, DeepEquals, pHashListSHA1[1])
+		})
+	})
 
 	digest, err = builder.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth)
 	c.Check(err, IsNil)

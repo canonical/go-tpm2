@@ -64,7 +64,8 @@ type PolicyBuilderBranchNode struct {
 	parentBranch  *PolicyBuilderBranch
 	childBranches []*PolicyBuilderBranch
 
-	committed bool
+	currentBranch *PolicyBuilderBranch
+	committed     bool
 }
 
 func (n *PolicyBuilderBranchNode) policy() *PolicyBuilder {
@@ -80,54 +81,54 @@ func (n *PolicyBuilderBranchNode) digest() (tpm2.Digest, error) {
 }
 
 func (n *PolicyBuilderBranchNode) commitBranchNode() error {
-	if n.committed {
-		return errors.New("internal error: branch node already committed")
-	}
 	n.committed = true
-
 	var branches []*policyBranch
 	for _, branch := range n.childBranches {
-		if err := branch.lockBranch(); err != nil {
-			return err
-		}
-
-		if len(branch.policyBranch.Policy) == 0 {
-			// omit branches with no assertions
-			continue
-		}
-
 		branches = append(branches, &branch.policyBranch)
 	}
 
 	return n.parentBranch.commitBranches(branches)
 }
 
+type PolicyBuilderBranchContinuation func(*PolicyBuilderBranch)
+
 // AddBranch adds a new branch to this branch node. The branch can be created with
 // an optional name which can be used to select it during execution.
-//
-// The returned branch will be locked from further modifications when the branches associated
-// with this node are committed to the parent branch (see [PolicyBuilderBranch.AddBranchNode]).
-func (n *PolicyBuilderBranchNode) AddBranch(name string) *PolicyBuilderBranch {
+func (n *PolicyBuilderBranchNode) AddBranch(name string, fn PolicyBuilderBranchContinuation) error {
 	if n.committed {
-		n.policy().fail("AddBranch", errors.New("cannot add branch to committed node"))
+		return n.policy().fail("AddBranch", errors.New("cannot add branch to committed node"))
+	}
+	if n.currentBranch != nil {
+		return n.policy().fail("AddBranch", errors.New("cannot add branch before the currently in progress branch is finished"))
 	}
 	if len(n.childBranches) >= policyOrMaxDigests {
-		n.policy().fail("AddBranch", fmt.Errorf("cannot add more than %d branches", policyOrMaxDigests))
+		return n.policy().fail("AddBranch", fmt.Errorf("cannot add more than %d branches", policyOrMaxDigests))
 	}
 
 	pbn := policyBranchName(name)
 	if !pbn.isValid() {
-		n.policy().fail("AddBranch", errors.New("invalid branch name"))
+		return n.policy().fail("AddBranch", errors.New("invalid branch name"))
 	}
 
 	digest, err := n.digest()
 	if err != nil {
-		n.policy().fail("AddBranch", fmt.Errorf("internal error: %w", err))
+		return n.policy().fail("AddBranch", fmt.Errorf("internal error: %w", err))
 	}
 
 	b := newPolicyBuilderBranch(n.policy(), n.alg(), pbn, digest)
-	n.childBranches = append(n.childBranches, b)
-	return b
+	n.currentBranch = b
+	fn(b)
+	n.currentBranch = nil
+
+	if err := b.completeBranch(); err != nil {
+		return n.policy().fail("AddBranch", fmt.Errorf("cannot complete branch: %w", err))
+	}
+	if len(b.policyBranch.Policy) > 0 {
+		// only include branches with assertions.
+		n.childBranches = append(n.childBranches, b)
+	}
+
+	return n.policy().err
 }
 
 // PolicyBuilderBranch corresponds to a branch in a policy that is being computed.
@@ -139,7 +140,6 @@ type PolicyBuilderBranch struct {
 	parentIsEmpty bool
 
 	currentBranchNode *PolicyBuilderBranchNode
-	locked            bool
 }
 
 func newPolicyBuilderBranch(policy *PolicyBuilder, alg tpm2.HashAlgorithmId, name policyBranchName, digest tpm2.Digest) *PolicyBuilderBranch {
@@ -190,24 +190,20 @@ func (b *PolicyBuilderBranch) commitBranches(branches []*policyBranch) error {
 	return nil
 }
 
-func (b *PolicyBuilderBranch) commitCurrentBranchNode() error {
-	if b.currentBranchNode == nil {
-		return nil
-	}
-	return b.currentBranchNode.commitBranchNode()
-}
-
 func (b *PolicyBuilderBranch) prepareToModifyBranch() error {
 	if b.policy.failed() {
 		return b.policy.err
 	}
-	if b.locked {
-		return errors.New("cannot modify locked branch")
+	if len(b.policyBranch.PolicyDigests) > 0 {
+		return errors.New("cannot modify completed branch")
 	}
-	return b.commitCurrentBranchNode()
+	if b.currentBranchNode != nil {
+		return errors.New("cannot modify branch whilst a branch node is being added")
+	}
+	return nil
 }
 
-func (b *PolicyBuilderBranch) lockBranch() error {
+func (b *PolicyBuilderBranch) completeBranch() error {
 	if err := b.prepareToModifyBranch(); err != nil {
 		return err
 	}
@@ -217,7 +213,6 @@ func (b *PolicyBuilderBranch) lockBranch() error {
 		return fmt.Errorf("internal error: %w", err)
 	}
 	b.policyBranch.PolicyDigests = taggedHashList{{HashAlg: b.alg(), Digest: digest}}
-	b.locked = true
 
 	return nil
 }
@@ -730,24 +725,27 @@ func (b *PolicyBuilderBranch) PolicyOR(pHashList ...tpm2.Digest) (tpm2.Digest, e
 	return digest, nil
 }
 
+type PolicyBuilderBranchNodeContinuation func(*PolicyBuilderBranchNode)
+
 // AddBranchNode adds a branch node to this branch from which sub-branches can be added.
 // This makes it possible to create policies that can be satisified with different sets of
 // conditions. One of the sub-branches will be selected during execution, and will be
 // executed before the remaining assertions in this branch.
-//
-// The branches added to the returned branch node will be committed to this branch and
-// the branch node will be locked from further modifications by subsequent additions to this
-// branch, or any ancestor branches, or by calling [PolicyBuilder.Policy] or
-// [PolicyBuilder.Digest]. This ensures that branches can only append to a policy with
-// the [PolicyBuilder] API.
-func (b *PolicyBuilderBranch) AddBranchNode() *PolicyBuilderBranchNode {
+func (b *PolicyBuilderBranch) AddBranchNode(fn PolicyBuilderBranchNodeContinuation) error {
 	if err := b.prepareToModifyBranch(); err != nil {
-		b.policy.fail("AddBranchNode", err)
+		return b.policy.fail("AddBranchNode", err)
 	}
 
 	n := &PolicyBuilderBranchNode{parentBranch: b}
 	b.currentBranchNode = n
-	return n
+	fn(n)
+	b.currentBranchNode = nil
+
+	if err := n.commitBranchNode(); err != nil {
+		return b.policy.fail("AddBranchNode", fmt.Errorf("cannot commit branch node: %w", err))
+	}
+
+	return b.policy.err
 }
 
 // PolicyBuilder provides a way to compute an authorization policy. A policy consists
@@ -843,8 +841,8 @@ func (b *PolicyBuilder) Digest() (tpm2.Digest, error) {
 		return nil, fmt.Errorf("could not build policy: %w", b.err)
 	}
 
-	if err := b.root.commitCurrentBranchNode(); err != nil {
-		return nil, fmt.Errorf("cannot commit current branch node in root branch: %w", err)
+	if b.root.currentBranchNode != nil {
+		return nil, errors.New("branch node is being added")
 	}
 
 	digest, err := b.root.digest()
@@ -865,8 +863,8 @@ func (b *PolicyBuilder) Policy() (tpm2.Digest, *Policy, error) {
 		return nil, nil, fmt.Errorf("could not build policy: %w", b.err)
 	}
 
-	if err := b.root.commitCurrentBranchNode(); err != nil {
-		return nil, nil, fmt.Errorf("cannot commit current branch node in root branch: %w", err)
+	if b.root.currentBranchNode != nil {
+		return nil, nil, errors.New("branch node is being added")
 	}
 
 	digest, err := b.root.digest()
