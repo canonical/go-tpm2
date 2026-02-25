@@ -272,8 +272,14 @@ type authorizedPolicy struct {
 	authorization *PolicyAuthorization
 }
 
+type authorizationCommandParams struct {
+	commandCode tpm2.CommandCode
+	handles     []NamedHandle
+	params      []interface{}
+}
+
 // policySession corresponds to a policy session. This is a limited version
-// of PolicySession that's used in all code paths in Policy.
+// of PolicyExecuteSession that's used in all code paths in Policy.
 type policySession interface {
 	Name() tpm2.Name
 	HashAlg() tpm2.HashAlgorithmId
@@ -315,7 +321,7 @@ type policyRunner interface {
 
 	authResourceName() tpm2.Name
 	loadExternal(public *tpm2.Public) (ResourceContext, error)
-	authorize(auth ResourceContext, askForPolicy bool, usage *PolicySessionUsage, prefer tpm2.SessionType) (SessionContext, error)
+	authorize(auth ResourceContext, askForPolicy bool, params *authorizationCommandParams, prefer tpm2.SessionType) (SessionContext, error)
 	runBranch(branches policyBranches) (selected int, err error)
 	runAuthorizedPolicy(keySign *tpm2.Public, policyRef tpm2.Nonce, policies []*authorizedPolicy) (approvedPolicy tpm2.Digest, checkTicket *tpm2.TkVerified, err error)
 	notifyPolicyPCRDigest() error
@@ -389,13 +395,13 @@ func (e *policyNVElement) run(runner policyRunner) (err error) {
 		}
 	}
 
-	usage := NewPolicySessionUsage(
-		tpm2.CommandPolicyNV,
-		[]NamedHandle{auth.Resource(), nvIndex, runner.session().Name()},
-		e.OperandB, e.Offset, e.Operation,
-	)
+	params := &authorizationCommandParams{
+		commandCode: tpm2.CommandPolicyNV,
+		handles:     []NamedHandle{auth.Resource(), nvIndex, runner.session().Name()},
+		params:      []any{e.OperandB, e.Offset, e.Operation},
+	}
 
-	authSession, err := runner.authorize(auth, askForPolicy, usage, tpm2.SessionTypePolicy)
+	authSession, err := runner.authorize(auth, askForPolicy, params, tpm2.SessionTypePolicy)
 	if err != nil {
 		return &PolicyNVError{
 			Index: nvIndex.Handle(),
@@ -449,13 +455,13 @@ func (e *policySecretElement) run(runner policyRunner) (err error) {
 	}
 	defer authObject.Flush()
 
-	usage := NewPolicySessionUsage(
-		tpm2.CommandPolicySecret,
-		[]NamedHandle{authObject.Resource(), runner.session().Name()},
-		e.CpHashA, e.PolicyRef, e.Expiration,
-	)
+	params := &authorizationCommandParams{
+		commandCode: tpm2.CommandPolicySecret,
+		handles:     []NamedHandle{authObject.Resource(), runner.session().Name()},
+		params:      []any{e.CpHashA, e.PolicyRef, e.Expiration},
+	}
 
-	authSession, err := runner.authorize(authObject, false, usage, tpm2.SessionTypeHMAC)
+	authSession, err := runner.authorize(authObject, false, params, tpm2.SessionTypeHMAC)
 	if err != nil {
 		return &PolicyAuthorizationError{
 			AuthName:  e.AuthObjectName,

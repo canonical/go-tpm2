@@ -142,7 +142,7 @@ func (w *treeWalker) nameHash(nameHash *policyNameHashElement) error {
 	return nil
 }
 
-func (w *treeWalker) authorize(auth ResourceContext, askForPolicy bool, usage *PolicySessionUsage, prefer tpm2.SessionType) (SessionContext, error) {
+func (w *treeWalker) authorize(auth ResourceContext, askForPolicy bool, commandParams *authorizationCommandParams, prefer tpm2.SessionType) (SessionContext, error) {
 	return new(mockSessionContext), nil
 }
 

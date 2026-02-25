@@ -359,7 +359,7 @@ func (r *policyExecuteResources) LoadedResource(name tpm2.Name, policyParams *Lo
 				WithPolicyExecuteResources(r),
 				WithExternalTPMHelper(r.newTPMHelper(r.tpm, r.sessions...)),
 				WithTickets(tickets),
-				WithSessionUsageConstraint(NewPolicySessionUsage(tpm2.CommandLoad, []NamedHandle{parent.Resource()}, object.Private, object.Public)),
+				WithSessionUsageCommandConstraint(tpm2.CommandLoad, []NamedHandle{parent.Resource()}, object.Private, object.Public),
 				WithIgnoreAuthorizationsConstraint(policyParams.IgnoreAuthorizations),
 				WithIgnoreNVConstraint(policyParams.IgnoreNV),
 			)

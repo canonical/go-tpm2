@@ -16,18 +16,13 @@ type executePolicyTickets struct {
 	invalidTickets map[*PolicyTicket]struct{}
 }
 
-func newExecutePolicyTickets(alg tpm2.HashAlgorithmId, tickets []*PolicyTicket, usage *PolicySessionUsage) (*executePolicyTickets, error) {
+func newExecutePolicyTickets(alg tpm2.HashAlgorithmId, tickets []*PolicyTicket, usage *policySessionUsageConstraints) (*executePolicyTickets, error) {
 	var usageCpHash tpm2.Digest
-	if usage != nil {
-		var handleNames []Named
-		for _, handle := range usage.handles {
-			handleNames = append(handleNames, handle)
-		}
-
+	if usage.canCpHash() {
 		var err error
-		usageCpHash, err = ComputeCpHash(alg, usage.commandCode, handleNames, usage.params...)
+		usageCpHash, err = usage.cpHash(alg)
 		if err != nil {
-			return nil, fmt.Errorf("cannot compute cpHash from usage: %w", err)
+			return nil, fmt.Errorf("cannot compute cpHash from constraints: %w", err)
 		}
 
 	}
@@ -134,7 +129,7 @@ type policyExecuteRunner struct {
 	authorizer executePolicyResourcesAuthorizer
 	tpm        TPMHelper
 
-	usage                *PolicySessionUsage
+	usage                *policySessionUsageConstraints
 	ignoreAuthorizations []PolicyAuthorizationID
 	ignoreNV             []Named
 
@@ -155,10 +150,10 @@ func newPolicyExecuteRunner(session PolicyExecuteSession, params *policyExecuteP
 		policyResources:      resources,
 		authorizer:           authorizer,
 		tpm:                  params.tpm,
-		usage:                params.usage,
+		usage:                &params.usage,
 		ignoreAuthorizations: params.ignoreAuthorizations,
 		ignoreNV:             params.ignoreNV,
-		pathChooser:          newPolicyPathChooser(session.HashAlg(), resources, params.tpm, params.usage, params.ignoreAuthorizations, params.ignoreNV),
+		pathChooser:          newPolicyPathChooser(session.HashAlg(), resources, params.tpm, &params.usage, params.ignoreAuthorizations, params.ignoreNV),
 		remaining:            policyBranchPath(params.path),
 	}
 }
@@ -198,7 +193,7 @@ func (r *policyExecuteRunner) loadExternal(public *tpm2.Public) (ResourceContext
 	return r.tpm.LoadExternal(sensitive, public, tpm2.HandleNull)
 }
 
-func (r *policyExecuteRunner) authorize(auth ResourceContext, askForPolicy bool, usage *PolicySessionUsage, prefer tpm2.SessionType) (sessionOut SessionContext, err error) {
+func (r *policyExecuteRunner) authorize(auth ResourceContext, askForPolicy bool, commandParams *authorizationCommandParams, prefer tpm2.SessionType) (sessionOut SessionContext, err error) {
 	policy := auth.Policy()
 	if policy == nil && askForPolicy {
 		policy, err = r.policyResources.policy(auth.Resource().Name())
@@ -307,8 +302,15 @@ func (r *policyExecuteRunner) authorize(auth ResourceContext, askForPolicy bool,
 	var authValueNeeded bool
 	if sessionType == tpm2.SessionTypePolicy {
 		params := &policyExecuteParams{
-			tpm:                  r.tpm,
-			usage:                usage,
+			tpm: r.tpm,
+			usage: policySessionUsageConstraints{
+				hasCommand:  true,
+				hasHandles:  true,
+				hasParams:   true,
+				commandCode: commandParams.commandCode,
+				handles:     commandParams.handles,
+				params:      commandParams.params,
+			},
 			ignoreAuthorizations: r.ignoreAuthorizations,
 			ignoreNV:             r.ignoreNV,
 		}
@@ -489,61 +491,25 @@ func (r *policyExecuteRunner) run(elements policyElements) error {
 	return nil
 }
 
-// PolicySessionUsage describes how a policy session will be used, and assists with
-// automatically selecting branches where a policy has command context-specific branches.
-type PolicySessionUsage struct {
+type policySessionUsageConstraints struct {
+	hasCommand bool
+	hasHandles bool
+	hasParams  bool
+
 	commandCode tpm2.CommandCode
 	handles     []NamedHandle
 	params      []interface{}
-	authIndex   uint8
+
+	authIndex uint8
+
 	noAuthValue bool
 }
 
-// NewPolicySessionUsage creates a new PolicySessionUsage. The returned usage
-// will assume that the session is being used for authorization of the first
-// handle, which is true in the vast majority of cases. If the session is being
-// used for authorization of another handle, use [WithAuthIndex].
-func NewPolicySessionUsage(command tpm2.CommandCode, handles []NamedHandle, params ...interface{}) *PolicySessionUsage {
-	if len(handles) == 0 || len(handles) > 3 {
-		panic("invalid number of handles")
-	}
-	return &PolicySessionUsage{
-		commandCode: command,
-		handles:     handles,
-		params:      params,
-	}
+func (u *policySessionUsageConstraints) canCpHash() bool {
+	return u.hasCommand && u.hasHandles && u.hasParams
 }
 
-// WithAuthIndex indicates that the policy session is being used for authorization
-// of the handle at the specified index (zero indexed). This is zero for most commands,
-// where most commands only have a single handle that requires authorization. There are
-// a few commands that require authorization for 2 handles: TPM2_ActivateCredential,
-// TPM2_EventSequenceComplete, TPM2_Certify, TPM2_GetSessionAuditDigest,
-// TPM2_GetCommandAuditDigest, TPM2_GetTime, TPM2_CertifyX509, TPM2_NV_UndefineSpaceSpecial,
-// TPM2_NV_Certify, and TPM2_AC_Send.
-func (u *PolicySessionUsage) WithAuthIndex(index uint8) *PolicySessionUsage {
-	if int(index) >= len(u.handles) {
-		panic("invalid index")
-	}
-	u.authIndex = index
-	return u
-}
-
-// WithoutAuthValue indicates that the policy session is being used to authorize a
-// resource that the authorization value cannot be determined for.
-func (u *PolicySessionUsage) WithoutAuthValue() *PolicySessionUsage {
-	u.noAuthValue = true
-	return u
-}
-
-// CommandCode returns the command code for this usage.
-func (u PolicySessionUsage) CommandCode() tpm2.CommandCode {
-	return u.commandCode
-}
-
-// CpHash returns the command parameter hash for this usage for the specified session
-// algorithm.
-func (u PolicySessionUsage) CpHash(alg tpm2.HashAlgorithmId) (tpm2.Digest, error) {
+func (u *policySessionUsageConstraints) cpHash(alg tpm2.HashAlgorithmId) (tpm2.Digest, error) {
 	var handleNames []Named
 	for _, handle := range u.handles {
 		handleNames = append(handleNames, handle)
@@ -551,8 +517,11 @@ func (u PolicySessionUsage) CpHash(alg tpm2.HashAlgorithmId) (tpm2.Digest, error
 	return ComputeCpHash(alg, u.commandCode, handleNames, u.params...)
 }
 
-// NameHash returns the name hash for this usage for the specified session algorithm.
-func (u PolicySessionUsage) NameHash(alg tpm2.HashAlgorithmId) (tpm2.Digest, error) {
+func (u *policySessionUsageConstraints) canNameHash() bool {
+	return u.hasHandles
+}
+
+func (u *policySessionUsageConstraints) nameHash(alg tpm2.HashAlgorithmId) (tpm2.Digest, error) {
 	var handleNames []Named
 	for _, handle := range u.handles {
 		handleNames = append(handleNames, handle)
@@ -560,14 +529,10 @@ func (u PolicySessionUsage) NameHash(alg tpm2.HashAlgorithmId) (tpm2.Digest, err
 	return ComputeNameHash(alg, handleNames...)
 }
 
-// AllowAuthValue indicates whether this usage permits use of the auth value for the
-// resource being authorized.
-func (u PolicySessionUsage) AllowAuthValue() bool {
-	return !u.noAuthValue
-}
-
-// AuthHandle returns the handle for the resource being authorized.
-func (u PolicySessionUsage) AuthHandle() NamedHandle {
+func (u *policySessionUsageConstraints) authHandle() NamedHandle {
+	if len(u.handles) == 0 {
+		return nil
+	}
 	return u.handles[u.authIndex]
 }
 
@@ -579,7 +544,7 @@ type policyExecuteParams struct {
 	resources            PolicyExecuteResources
 	tpm                  TPMHelper
 	tickets              []*PolicyTicket
-	usage                *PolicySessionUsage
+	usage                policySessionUsageConstraints
 	path                 string
 	ignoreAuthorizations []PolicyAuthorizationID
 	ignoreNV             []Named
@@ -636,12 +601,76 @@ func WithTickets(tickets []*PolicyTicket) PolicyExecuteOption {
 	}
 }
 
-// WithSessionUsageConstraint tells [Policy.Execute] how the executed policy will
-// be used, and assists with automatically choosing branches where a policy has command
-// context-specific branches.
-func WithSessionUsageConstraint(usage *PolicySessionUsage) PolicyExecuteOption {
+// WithSessionUsageHandlesConstraint tells [Policy.Execute] which handles will be used
+// with the executed policy, and assists with automatically choosing branches where a
+// policy has branches containing TPM2_PolicyNameHash, TPM2_PolicyDuplicationSelect or
+// TPM2_PolicyNvWritten assertions.
+//
+// This clears the effect of [WithSessionUsageAuthIndex].
+func WithSessionUsageHandlesContraint(handles ...NamedHandle) PolicyExecuteOption {
+	if len(handles) == 0 || len(handles) > 3 {
+		panic("invalid number of handles")
+	}
 	return func(p *policyExecuteParams) {
-		p.usage = usage
+		p.usage = policySessionUsageConstraints{
+			hasHandles:  true,
+			handles:     handles,
+			noAuthValue: p.usage.noAuthValue,
+		}
+	}
+}
+
+// WithSessionUsageHandlesConstraint tells [Policy.Execute] which command, handles and
+// parameters will be used with the executed policy, and assists with automatically choosing
+// branches where a policy has branches containing TPM2_PolicyCommandCode, TPM2_PolicyCpHash,
+// TPM2_PolicyNameHash, TPM2_PolicyDuplicationSelect or TPM2_PolicyNvWritten assertions.
+//
+// This clears the effect of [WithSessionUsageAuthIndex].
+func WithSessionUsageCommandConstraint(commandCode tpm2.CommandCode, handles []NamedHandle, params ...any) PolicyExecuteOption {
+	if len(handles) == 0 || len(handles) > 3 {
+		panic("invalid number of handles")
+	}
+	return func(p *policyExecuteParams) {
+		p.usage = policySessionUsageConstraints{
+			hasCommand:  true,
+			hasHandles:  true,
+			hasParams:   true,
+			commandCode: commandCode,
+			handles:     handles,
+			params:      params,
+			noAuthValue: p.usage.noAuthValue,
+		}
+	}
+}
+
+// WithSessionUsageNoAuthValueConstraint tells [Policy.Execute] that an authorization value
+// will not be available when the executed policy is used. This ensures that branches with
+// TPM2_PolicyAuthValue or TPM2_PolicyPassword assertions will not be selected.
+func WithSessionUsageNoAuthValueConstraint() PolicyExecuteOption {
+	return func(p *policyExecuteParams) {
+		p.usage.noAuthValue = true
+	}
+}
+
+// WithSessionUsageAuthIndex tells [Policy.Execute] the index (zero indexed) of the handle
+// that the executed policy will be used for. This is zero for most commands, where most
+// commands only have a single handle that requires authorization. There are a few commands
+// that require authorization for 2 handles: TPM2_ActivateCredential,
+// TPM2_EventSequenceComplete, TPM2_Certify, TPM2_GetSessionAuditDigest,
+// TPM2_GetCommandAuditDigest, TPM2_GetTime, TPM2_CertifyX509, TPM2_NV_UndefineSpaceSpecial,
+// TPM2_NV_Certify, and TPM2_AC_Send.
+//
+// This must be used after [WithSessionUsageHandlesConstraint] or
+// [WithSessionUsageCommandConstraint].
+func WithSessionUsageAuthIndex(index uint8) PolicyExecuteOption {
+	return func(p *policyExecuteParams) {
+		if !p.usage.hasHandles {
+			panic("must use with WithSessionUsageHandlesConstraint or WithSessionUsageCommandConstraint")
+		}
+		if int(index) >= len(p.usage.handles) {
+			panic("invalid index")
+		}
+		p.usage.authIndex = index
 	}
 }
 
@@ -765,9 +794,6 @@ func (r *PolicyExecuteResult) NvWritten() (nvWrittenSet bool, set bool) {
 
 // Execute runs this policy using the supplied policy session.
 //
-// The caller may supply additional parameters via the PolicyExecuteParams struct, which is an
-// optional argument.
-//
 // TPM2_PolicyNV assertions will create a session for authorizing the associated NV index. The
 // auth type is determined automatically from the NV index attributes, but where both HMAC and
 // policy auth is supported, policy auth is used.
@@ -785,14 +811,16 @@ func (r *PolicyExecuteResult) NvWritten() (nvWrittenSet bool, set bool) {
 // assertions. It also has a preference for paths that don't include TPM2_PolicyNV assertions that
 // require authorization to use or read, and for paths without TPM2_PolicyCommandCode,
 // TPM2_PolicyCpHash, TPM2_PolicyNameHash and TPM2_PolicyDuplicatiionSelect assertions where no
-// [PolicySessionUsage] is supplied. A path is omitted from the set of suitable paths if any of the
-// following conditions are true:
+// session usage contraints are supplied. A path is omitted from the set of suitable paths if any of
+// the following conditions are true:
 //   - It contains a command code, command parameter hash, or name hash that doesn't match
-//     the supplied [PolicySessionUsage].
+//     those supplied via [WithSessionUsageCommandConstraint] or
+//     [WithSessionUsageHandlesConstraint].
 //   - It contains a TPM2_PolicyAuthValue or TPM2_PolicyPassword assertion and this isn't permitted
-//     by the supplied [PolicySessionUsage].
+//     because of the [WithSessionUsageNoAuthValue] option.
 //   - It uses TPM2_PolicyNvWritten with a value that doesn't match the public area of the NV index
-//     that the session will be used to authorize, provided via the supplied [PolicySessionUsage].
+//     that the session will be used to authorize, provided via the [WithSessionUsageCommandConstraint]
+//     or [WithSessionUsageHandlesConstraint]..
 //   - It uses TPM2_PolicySigned, TPM2_PolicySecret or TPM2_PolicyAuthorize and the specific
 //     authorization was supplied to [WithIgnoreAuthorizationsConstraint].
 //   - It uses TPM2_PolicyNV and the NV index was supplied to [WithIgnoreNVConstraint].
@@ -835,7 +863,7 @@ func (p *Policy) Execute(session PolicyExecuteSession, options ...PolicyExecuteO
 		params.tpm = new(nullTpmHelper)
 	}
 
-	tickets, err := newExecutePolicyTickets(session.HashAlg(), params.tickets, params.usage)
+	tickets, err := newExecutePolicyTickets(session.HashAlg(), params.tickets, &params.usage)
 	if err != nil {
 		return nil, err
 	}

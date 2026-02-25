@@ -55,7 +55,7 @@ func (r *policyStringifierRunner) loadExternal(public *tpm2.Public) (ResourceCon
 	return newResourceContext(resource, nil), nil
 }
 
-func (r *policyStringifierRunner) authorize(auth ResourceContext, askForPolicy bool, usage *PolicySessionUsage, prefer tpm2.SessionType) (session SessionContext, err error) {
+func (r *policyStringifierRunner) authorize(auth ResourceContext, askForPolicy bool, commandParams *authorizationCommandParams, prefer tpm2.SessionType) (session SessionContext, err error) {
 	return new(mockSessionContext), nil
 }
 

@@ -83,7 +83,7 @@ type policyPathChooser struct {
 	sessionAlg           tpm2.HashAlgorithmId
 	resources            *executePolicyResources
 	tpm                  TPMHelper
-	usage                *PolicySessionUsage
+	usage                *policySessionUsageConstraints
 	ignoreAuthorizations []PolicyAuthorizationID
 	ignoreNV             []Named
 
@@ -92,7 +92,7 @@ type policyPathChooser struct {
 	nvCheckedOk map[nvAssertionMapKey]struct{} // map of PolicyNV assertions that would succeed
 }
 
-func newPolicyPathChooser(sessionAlg tpm2.HashAlgorithmId, resources *executePolicyResources, tpm TPMHelper, usage *PolicySessionUsage, ignoreAuthorizations []PolicyAuthorizationID, ignoreNV []Named) *policyPathChooser {
+func newPolicyPathChooser(sessionAlg tpm2.HashAlgorithmId, resources *executePolicyResources, tpm TPMHelper, usage *policySessionUsageConstraints, ignoreAuthorizations []PolicyAuthorizationID, ignoreNV []Named) *policyPathChooser {
 	return &policyPathChooser{
 		sessionAlg:           sessionAlg,
 		resources:            resources,
@@ -166,70 +166,74 @@ func (s *policyPathChooser) filterMissingAuthorizedBranches() {
 // filterUsageIncompatibleBranches removes branches that are not compatible with
 // the specified session usage, if it is supplied.
 func (s *policyPathChooser) filterUsageIncompatibleBranches() error {
-	if s.usage == nil {
-		return nil
-	}
-
 	// iterate over each execution path
 	for p, d := range s.walkResult.details {
-		code, set := d.CommandCode()
-		if set && code != s.usage.CommandCode() {
-			// this path doesn't match the command code, so drop it
-			delete(s.walkResult.details, p)
-			continue
-		}
-
-		cpHash, set := d.CpHash()
-		if set {
-			usageCpHash, err := s.usage.CpHash(s.sessionAlg)
-			if err != nil {
-				return fmt.Errorf("cannot obtain cpHash from usage parameters: %w", err)
-			}
-			if !bytes.Equal(usageCpHash, cpHash) {
-				// this path doesn't match the command parameters, so drop it
+		if s.usage.hasCommand {
+			code, set := d.CommandCode()
+			if set && code != s.usage.commandCode {
+				// this path doesn't match the command code, so drop it
 				delete(s.walkResult.details, p)
 				continue
 			}
 		}
 
-		nameHash, set := d.NameHash()
-		if set {
-			usageNameHash, err := s.usage.NameHash(s.sessionAlg)
-			if err != nil {
-				return fmt.Errorf("cannot obtain nameHash from usage parameters: %w", err)
-			}
-			if !bytes.Equal(usageNameHash, nameHash) {
-				// this path doesn't match the command handles, so drop it
-				delete(s.walkResult.details, p)
-				continue
+		if s.usage.canCpHash() {
+			cpHash, set := d.CpHash()
+			if set {
+				usageCpHash, err := s.usage.cpHash(s.sessionAlg)
+				if err != nil {
+					return fmt.Errorf("cannot obtain cpHash from usage parameters: %w", err)
+				}
+				if !bytes.Equal(usageCpHash, cpHash) {
+					// this path doesn't match the command parameters, so drop it
+					delete(s.walkResult.details, p)
+					continue
+				}
 			}
 		}
 
-		if d.AuthValueNeeded && !s.usage.AllowAuthValue() {
+		if s.usage.canNameHash() {
+			nameHash, set := d.NameHash()
+			if set {
+				usageNameHash, err := s.usage.nameHash(s.sessionAlg)
+				if err != nil {
+					return fmt.Errorf("cannot obtain nameHash from usage parameters: %w", err)
+				}
+				if !bytes.Equal(usageNameHash, nameHash) {
+					// this path doesn't match the command handles, so drop it
+					delete(s.walkResult.details, p)
+					continue
+				}
+			}
+		}
+
+		if d.AuthValueNeeded && s.usage.noAuthValue {
 			// this path requires an auth value which the usage indicates is not possible, so drop it
 			delete(s.walkResult.details, p)
 			continue
 		}
 
-		nvWritten, set := d.NvWritten()
-		if set {
-			authHandle := s.usage.AuthHandle()
-			if authHandle.Handle().Type() != tpm2.HandleTypeNVIndex {
-				// this path uses TPM2_PolicyNvWritten but the auth handle is not a
-				// NV index, so drop this path
-				delete(s.walkResult.details, p)
-				continue
-			}
-			pub, err := s.tpm.NVReadPublic(tpm2.NewHandleContext(authHandle.Handle()))
-			if err != nil {
-				return fmt.Errorf("cannot obtain NV index public area: %w", err)
-			}
-			written := pub.Attrs&tpm2.AttrNVWritten != 0
-			if nvWritten != written {
-				// this path uses TPM2_PolicyNvWritten but the auth handle attributes
-				// are incompatible, so drop this path.
-				delete(s.walkResult.details, p)
-				continue
+		if s.usage.hasHandles {
+			nvWritten, set := d.NvWritten()
+			if set {
+				authHandle := s.usage.authHandle()
+				if authHandle.Handle().Type() != tpm2.HandleTypeNVIndex {
+					// this path uses TPM2_PolicyNvWritten but the auth handle is not a
+					// NV index, so drop this path
+					delete(s.walkResult.details, p)
+					continue
+				}
+				pub, err := s.tpm.NVReadPublic(tpm2.NewHandleContext(authHandle.Handle()))
+				if err != nil {
+					return fmt.Errorf("cannot obtain NV index public area: %w", err)
+				}
+				written := pub.Attrs&tpm2.AttrNVWritten != 0
+				if nvWritten != written {
+					// this path uses TPM2_PolicyNvWritten but the auth handle attributes
+					// are incompatible, so drop this path.
+					delete(s.walkResult.details, p)
+					continue
+				}
 			}
 		}
 	}
@@ -529,12 +533,20 @@ func (s *policyPathChooser) filterNVIncompatibleBranches() error {
 
 				rc := tpm2.NewResourceContext(nv.Index, nv.Name)
 				params := &policyExecuteParams{
-					tpm:   s.tpm,
-					usage: NewPolicySessionUsage(tpm2.CommandNVRead, []NamedHandle{rc, rc}, uint16(len(nv.OperandB)), nv.Offset).WithoutAuthValue(),
+					tpm: s.tpm,
+					usage: policySessionUsageConstraints{
+						hasCommand:  true,
+						hasHandles:  true,
+						hasParams:   true,
+						commandCode: tpm2.CommandNVRead,
+						handles:     []NamedHandle{rc, rc},
+						params:      []any{uint16(len(nv.OperandB)), nv.Offset},
+						noAuthValue: true,
+					},
 				}
 
 				resources := new(nullPolicyResources)
-				tickets, _ := newExecutePolicyTickets(s.sessionAlg, nil, nil)
+				tickets, _ := newExecutePolicyTickets(s.sessionAlg, nil, &params.usage)
 				runner := newPolicyExecuteRunner(
 					policySession,
 					params,
@@ -756,17 +768,17 @@ func (s *policyPathChooser) choose(branches policyBranches) (policyBranchPath, e
 		}
 
 		// prefer paths without TPM2_PolicyCommandCode if we don't know the usage
-		if _, set := details.CommandCode(); set && s.usage == nil {
+		if _, set := details.CommandCode(); set && !s.usage.hasCommand {
 			continue
 		}
 
 		// prefer paths without TPM2_PolicyCpHash if we don't know the usage
-		if _, set := details.CpHash(); set && s.usage == nil {
+		if _, set := details.CpHash(); set && !s.usage.canCpHash() {
 			continue
 		}
 
 		// prefer paths without TPM2_PolicyNameHash if we don't know the usage
-		if _, set := details.NameHash(); set && s.usage == nil {
+		if _, set := details.NameHash(); set && !s.usage.canNameHash() {
 			continue
 		}
 

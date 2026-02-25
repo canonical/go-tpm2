@@ -42,7 +42,7 @@ func (*policyBuilderBranchRunner) loadExternal(public *tpm2.Public) (ResourceCon
 	return newResourceContext(resource, nil), nil
 }
 
-func (r *policyBuilderBranchRunner) authorize(auth ResourceContext, askForPolicy bool, usage *PolicySessionUsage, prefer tpm2.SessionType) (SessionContext, error) {
+func (r *policyBuilderBranchRunner) authorize(auth ResourceContext, askForPolicy bool, commandParams *authorizationCommandParams, prefer tpm2.SessionType) (SessionContext, error) {
 	return new(mockSessionContext), nil
 }
 

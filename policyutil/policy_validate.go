@@ -48,7 +48,7 @@ func (r *policyValidateRunner) loadExternal(public *tpm2.Public) (ResourceContex
 	return newResourceContext(resource, nil), nil
 }
 
-func (r *policyValidateRunner) authorize(auth ResourceContext, askForPolicy bool, usage *PolicySessionUsage, prefer tpm2.SessionType) (session SessionContext, err error) {
+func (r *policyValidateRunner) authorize(auth ResourceContext, askForPolicy bool, commandParams *authorizationCommandParams, prefer tpm2.SessionType) (session SessionContext, err error) {
 	return new(mockSessionContext), nil
 }
 
