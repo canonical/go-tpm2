@@ -272,10 +272,40 @@ type authorizedPolicy struct {
 	authorization *PolicyAuthorization
 }
 
+// policySession corresponds to a policy session. This is a limited version
+// of PolicySession that's used in all code paths in Policy.
+type policySession interface {
+	Name() tpm2.Name
+	HashAlg() tpm2.HashAlgorithmId
+
+	PolicySigned(authKey tpm2.ResourceContext, includeNonceTPM bool, cpHashA tpm2.Digest, policyRef tpm2.Nonce, expiration int32, auth *tpm2.Signature) (tpm2.Timeout, *tpm2.TkAuth, error)
+	PolicySecret(authObject tpm2.ResourceContext, cpHashA tpm2.Digest, policyRef tpm2.Nonce, expiration int32, authObjectAuthSession tpm2.SessionContext) (tpm2.Timeout, *tpm2.TkAuth, error)
+	PolicyTicket(timeout tpm2.Timeout, cpHashA tpm2.Digest, policyRef tpm2.Nonce, authName tpm2.Name, ticket *tpm2.TkAuth) error
+	PolicyOR(pHashList tpm2.DigestList) error
+	PolicyPCR(pcrDigest tpm2.Digest, pcrs tpm2.PCRSelectionList) error
+	PolicyNV(auth, index tpm2.ResourceContext, operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp, authAuthSession tpm2.SessionContext) error
+	PolicyCounterTimer(operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp) error
+	PolicyCommandCode(code tpm2.CommandCode) error
+	PolicyCpHash(cpHashA tpm2.Digest) error
+	PolicyNameHash(nameHash tpm2.Digest) error
+	PolicyDuplicationSelect(objectName, newParentName tpm2.Name, includeObject bool) error
+	PolicyAuthorize(approvedPolicy tpm2.Digest, policyRef tpm2.Nonce, keySign tpm2.Name, verified *tpm2.TkVerified) error
+	PolicyAuthValue() error
+	PolicyPassword() error
+	PolicyGetDigest() (tpm2.Digest, error)
+	PolicyNvWritten(writtenSet bool) error
+}
+
 type policyTickets interface {
 	ticket(authName tpm2.Name, policyRef tpm2.Nonce) *PolicyTicket
 	addTicket(ticket *PolicyTicket)
 	invalidTicket(ticket *PolicyTicket)
+}
+
+type policyResources interface {
+	loadedResource(name tpm2.Name) (ResourceContext, error)
+	authorizedPolicies(keySign tpm2.Name, policyRef tpm2.Nonce) ([]*Policy, error)
+	signedAuthorization(authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error)
 }
 
 type policyRunner interface {
@@ -986,6 +1016,45 @@ type policy struct {
 	Policy               policyElements
 }
 
+type nullTickets struct{}
+
+func (*nullTickets) ticket(authName tpm2.Name, policyRef tpm2.Nonce) *PolicyTicket {
+	return nil
+}
+
+func (*nullTickets) addTicket(ticket *PolicyTicket)     {}
+func (*nullTickets) invalidTicket(ticket *PolicyTicket) {}
+
+type mockPolicyResources struct {
+	authorized PolicyAuthorizedPolicies
+}
+
+func newMockPolicyResources(authorizedPolicies PolicyAuthorizedPolicies) *mockPolicyResources {
+	return &mockPolicyResources{
+		authorized: authorizedPolicies,
+	}
+}
+
+func (*mockPolicyResources) loadedResource(name tpm2.Name) (ResourceContext, error) {
+	// the handle is not relevant here
+	return newResourceContext(tpm2.NewResourceContext(0x80000000, name), nil), nil
+}
+
+func (r *mockPolicyResources) policy(name tpm2.Name) (*Policy, error) {
+	return nil, nil
+}
+
+func (r *mockPolicyResources) authorizedPolicies(keySign tpm2.Name, policyRef tpm2.Nonce) ([]*Policy, error) {
+	if r.authorized == nil {
+		return nil, nil
+	}
+	return r.authorized.AuthorizedPolicies(keySign, policyRef)
+}
+
+func (*mockPolicyResources) signedAuthorization(authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
+	return new(PolicySignedAuthorization), nil
+}
+
 // Policy corresponds to an authorization policy. It can be serialized with
 // [github.com/canonical/go-tpm2/mu].
 type Policy struct {
@@ -1010,15 +1079,6 @@ func (p *Policy) Unmarshal(r io.Reader) error {
 	}
 	return nil
 }
-
-type nullTickets struct{}
-
-func (*nullTickets) ticket(authName tpm2.Name, policyRef tpm2.Nonce) *PolicyTicket {
-	return nil
-}
-
-func (*nullTickets) addTicket(ticket *PolicyTicket)     {}
-func (*nullTickets) invalidTicket(ticket *PolicyTicket) {}
 
 // Digest returns the digest for this policy for the specified algorithm, if it
 // has been computed. If it hasn't been computed, ErrMissingDigest is returned.

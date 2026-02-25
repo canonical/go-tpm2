@@ -14,30 +14,6 @@ import (
 	"github.com/canonical/go-tpm2/mu"
 )
 
-// policySession corresponds to a policy session. This is a limited version
-// of PolicySession that's used in all code paths in Policy.
-type policySession interface {
-	Name() tpm2.Name
-	HashAlg() tpm2.HashAlgorithmId
-
-	PolicySigned(authKey tpm2.ResourceContext, includeNonceTPM bool, cpHashA tpm2.Digest, policyRef tpm2.Nonce, expiration int32, auth *tpm2.Signature) (tpm2.Timeout, *tpm2.TkAuth, error)
-	PolicySecret(authObject tpm2.ResourceContext, cpHashA tpm2.Digest, policyRef tpm2.Nonce, expiration int32, authObjectAuthSession tpm2.SessionContext) (tpm2.Timeout, *tpm2.TkAuth, error)
-	PolicyTicket(timeout tpm2.Timeout, cpHashA tpm2.Digest, policyRef tpm2.Nonce, authName tpm2.Name, ticket *tpm2.TkAuth) error
-	PolicyOR(pHashList tpm2.DigestList) error
-	PolicyPCR(pcrDigest tpm2.Digest, pcrs tpm2.PCRSelectionList) error
-	PolicyNV(auth, index tpm2.ResourceContext, operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp, authAuthSession tpm2.SessionContext) error
-	PolicyCounterTimer(operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp) error
-	PolicyCommandCode(code tpm2.CommandCode) error
-	PolicyCpHash(cpHashA tpm2.Digest) error
-	PolicyNameHash(nameHash tpm2.Digest) error
-	PolicyDuplicationSelect(objectName, newParentName tpm2.Name, includeObject bool) error
-	PolicyAuthorize(approvedPolicy tpm2.Digest, policyRef tpm2.Nonce, keySign tpm2.Name, verified *tpm2.TkVerified) error
-	PolicyAuthValue() error
-	PolicyPassword() error
-	PolicyGetDigest() (tpm2.Digest, error)
-	PolicyNvWritten(writtenSet bool) error
-}
-
 // SessionContext corresponds to a session on the TPM
 type SessionContext interface {
 	Session() tpm2.SessionContext

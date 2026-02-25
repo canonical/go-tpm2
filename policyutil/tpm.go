@@ -54,37 +54,46 @@ type TPMHelper interface {
 	GetPermanentHandleAuthPolicy(handle tpm2.Handle) (tpm2.TaggedHash, error)
 }
 
-type onlineTpmHelper struct {
+type tpmHelper struct {
 	newPolicySession NewPolicySessionFn
 	tpm              *tpm2.TPMContext
 	sessions         []tpm2.SessionContext
 }
 
-// TPMHelperParams provides parameters to [NewTPMHelper].
-type TPMHelperParams struct {
-	// NewPolicySessionFn allows the function used to create a new PolicySession
-	// in StartAuthSession to be overridden. The default is NewTPMPolicySession.
-	NewPolicySessionFn NewPolicySessionFn
+// TPMHelperOption is an option supplied to [NewTPMHelper].
+type TPMHelperOption func(*tpmHelper)
+
+// WithTPMHelperNewPolicySessionFn allows the function used to create a new
+// [PolicySession] in StartAuthSession to be overridden. The default is
+// [NewTPMPolicySession].
+func WithTPMHelperNewPolicySessionFn(fn NewPolicySessionFn) TPMHelperOption {
+	return func(h *tpmHelper) {
+		h.newPolicySession = fn
+	}
+}
+
+// WithTPMHelperSession allows extra sessions to be supplied to TPM commands.
+func WithTPMHelperSessions(sessions ...tpm2.SessionContext) TPMHelperOption {
+	return func(h *tpmHelper) {
+		h.sessions = sessions
+	}
 }
 
 // NewTPMHelper returns an implementation of TPMHelper that uses the supplied TPM context.
-func NewTPMHelper(tpm *tpm2.TPMContext, params *TPMHelperParams, sessions ...tpm2.SessionContext) TPMHelper {
-	if params == nil {
-		params = new(TPMHelperParams)
+func NewTPMHelper(tpm *tpm2.TPMContext, options ...TPMHelperOption) TPMHelper {
+	h := &tpmHelper{
+		tpm: tpm,
 	}
-	newPolicySession := params.NewPolicySessionFn
-	if newPolicySession == nil {
-		newPolicySession = NewTPMPolicySession
+	for _, opt := range options {
+		opt(h)
 	}
-
-	return &onlineTpmHelper{
-		newPolicySession: newPolicySession,
-		tpm:              tpm,
-		sessions:         sessions,
+	if h.newPolicySession == nil {
+		h.newPolicySession = NewTPMPolicySession
 	}
+	return h
 }
 
-func (h *onlineTpmHelper) StartAuthSession(sessionType tpm2.SessionType, alg tpm2.HashAlgorithmId) (SessionContext, PolicySession, error) {
+func (h *tpmHelper) StartAuthSession(sessionType tpm2.SessionType, alg tpm2.HashAlgorithmId) (SessionContext, PolicySession, error) {
 	session, err := h.tpm.StartAuthSession(nil, nil, sessionType, nil, alg, h.sessions...)
 	if err != nil {
 		return nil, nil, err
@@ -101,7 +110,7 @@ func (h *onlineTpmHelper) StartAuthSession(sessionType tpm2.SessionType, alg tpm
 	}
 }
 
-func (h *onlineTpmHelper) LoadExternal(inPrivate *tpm2.Sensitive, inPublic *tpm2.Public, hierarchy tpm2.Handle) (ResourceContext, error) {
+func (h *tpmHelper) LoadExternal(inPrivate *tpm2.Sensitive, inPublic *tpm2.Public, hierarchy tpm2.Handle) (ResourceContext, error) {
 	rc, err := h.tpm.LoadExternal(inPrivate, inPublic, hierarchy, h.sessions...)
 	if err != nil {
 		return nil, err
@@ -109,34 +118,34 @@ func (h *onlineTpmHelper) LoadExternal(inPrivate *tpm2.Sensitive, inPublic *tpm2
 	return newTpmResourceContextFlushable(h.tpm, rc, nil), nil
 }
 
-func (h *onlineTpmHelper) ReadPublic(handle tpm2.HandleContext) (*tpm2.Public, error) {
+func (h *tpmHelper) ReadPublic(handle tpm2.HandleContext) (*tpm2.Public, error) {
 	pub, _, _, err := h.tpm.ReadPublic(handle, h.sessions...)
 	return pub, err
 }
 
-func (h *onlineTpmHelper) VerifySignature(key tpm2.ResourceContext, digest tpm2.Digest, signature *tpm2.Signature) (*tpm2.TkVerified, error) {
+func (h *tpmHelper) VerifySignature(key tpm2.ResourceContext, digest tpm2.Digest, signature *tpm2.Signature) (*tpm2.TkVerified, error) {
 	return h.tpm.VerifySignature(key, digest, signature, h.sessions...)
 }
 
-func (h *onlineTpmHelper) PCRRead(pcrs tpm2.PCRSelectionList) (tpm2.PCRValues, error) {
+func (h *tpmHelper) PCRRead(pcrs tpm2.PCRSelectionList) (tpm2.PCRValues, error) {
 	_, values, err := h.tpm.PCRRead(pcrs, h.sessions...)
 	return values, err
 }
 
-func (h *onlineTpmHelper) ReadClock() (*tpm2.TimeInfo, error) {
+func (h *tpmHelper) ReadClock() (*tpm2.TimeInfo, error) {
 	return h.tpm.ReadClock(h.sessions...)
 }
 
-func (h *onlineTpmHelper) NVRead(auth, index tpm2.ResourceContext, size, offset uint16, authAuthSession tpm2.SessionContext) (tpm2.MaxNVBuffer, error) {
+func (h *tpmHelper) NVRead(auth, index tpm2.ResourceContext, size, offset uint16, authAuthSession tpm2.SessionContext) (tpm2.MaxNVBuffer, error) {
 	return h.tpm.NVReadRaw(auth, index, size, offset, authAuthSession, h.sessions...)
 }
 
-func (h *onlineTpmHelper) NVReadPublic(handle tpm2.HandleContext) (*tpm2.NVPublic, error) {
+func (h *tpmHelper) NVReadPublic(handle tpm2.HandleContext) (*tpm2.NVPublic, error) {
 	pub, _, err := h.tpm.NVReadPublic(handle, h.sessions...)
 	return pub, err
 }
 
-func (h *onlineTpmHelper) GetPermanentHandleAuthPolicy(handle tpm2.Handle) (tpm2.TaggedHash, error) {
+func (h *tpmHelper) GetPermanentHandleAuthPolicy(handle tpm2.Handle) (tpm2.TaggedHash, error) {
 	return h.tpm.GetCapabilityAuthPolicy(handle, h.sessions...)
 }
 

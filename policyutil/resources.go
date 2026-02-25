@@ -236,7 +236,11 @@ func NewTPMPolicyResources(tpm *tpm2.TPMContext, data *PolicyResourcesData, para
 	newTPMHelper := params.NewTPMHelperFn
 	if newTPMHelper == nil {
 		newTPMHelper = func(tpm *tpm2.TPMContext, sessions ...tpm2.SessionContext) TPMHelper {
-			return NewTPMHelper(tpm, &TPMHelperParams{NewPolicySessionFn: newPolicySession}, sessions...)
+			return NewTPMHelper(
+				tpm,
+				WithTPMHelperNewPolicySessionFn(newPolicySession),
+				WithTPMHelperSessions(sessions...),
+			)
 		}
 	}
 
@@ -511,12 +515,6 @@ func (*nullPolicyResources) ExternalSensitive(name tpm2.Name) (*tpm2.Sensitive, 
 	return nil, errors.New("no PolicyResources")
 }
 
-type policyResources interface {
-	loadedResource(name tpm2.Name) (ResourceContext, error)
-	authorizedPolicies(keySign tpm2.Name, policyRef tpm2.Nonce) ([]*Policy, error)
-	signedAuthorization(authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error)
-}
-
 type cachedResourceType int
 
 const (
@@ -673,36 +671,6 @@ func (r *executePolicyResources) authorizedPolicies(keySign tpm2.Name, policyRef
 
 func (r *executePolicyResources) signedAuthorization(authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
 	return r.resources.SignedAuthorization(r.session.Session().Params().HashAlg, r.session.Session().State().NonceTPM, authKey, policyRef)
-}
-
-type mockPolicyResources struct {
-	authorized PolicyAuthorizedPolicies
-}
-
-func newMockPolicyResources(authorizedPolicies PolicyAuthorizedPolicies) *mockPolicyResources {
-	return &mockPolicyResources{
-		authorized: authorizedPolicies,
-	}
-}
-
-func (*mockPolicyResources) loadedResource(name tpm2.Name) (ResourceContext, error) {
-	// the handle is not relevant here
-	return newResourceContext(tpm2.NewResourceContext(0x80000000, name), nil), nil
-}
-
-func (r *mockPolicyResources) policy(name tpm2.Name) (*Policy, error) {
-	return nil, nil
-}
-
-func (r *mockPolicyResources) authorizedPolicies(keySign tpm2.Name, policyRef tpm2.Nonce) ([]*Policy, error) {
-	if r.authorized == nil {
-		return nil, nil
-	}
-	return r.authorized.AuthorizedPolicies(keySign, policyRef)
-}
-
-func (*mockPolicyResources) signedAuthorization(authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
-	return new(PolicySignedAuthorization), nil
 }
 
 // PolicyAuthorizedPolicies provides a way for [Policy.Branches], [Policy.Details] and
