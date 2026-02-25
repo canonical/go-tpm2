@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"io"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"unicode/utf8"
@@ -20,7 +21,7 @@ import (
 )
 
 const (
-	pathForbiddenChars = "{}*<>"
+	pathForbiddenChars = "{}*<>[]/"
 
 	// We use command codes to identify element types. In the case
 	// where we need a custom command code for a special element,
@@ -655,31 +656,33 @@ type policyBranch struct {
 
 type policyBranches []*policyBranch
 
-func (b policyBranches) selectBranch(next string) (int, error) {
+func (b policyBranches) filterBranches(pattern string) ([]int, error) {
 	switch {
-	case next[0] == '{':
-		// select branch by index
+	case pattern[0] == '{':
+		// return a single branch by index
 		var selected int
-		if _, err := fmt.Sscanf(string(next), "{%d}", &selected); err != nil {
-			return 0, fmt.Errorf("cannot select branch: badly formatted path component \"%s\": %w", next, err)
+		if _, err := fmt.Sscanf(pattern, "{%d}", &selected); err != nil {
+			return nil, fmt.Errorf("bad index selector: %w", err)
 		}
-		if selected < 0 || selected >= len(b) {
-			return 0, fmt.Errorf("cannot select branch: selected path %d out of range", selected)
+		if selected < 0 {
+			return nil, fmt.Errorf("bad index selector %d: is negative", selected)
 		}
-		return selected, nil
-	case strings.ContainsAny(string(next), pathForbiddenChars):
-		return 0, fmt.Errorf("cannot select branch: invalid component \"%s\"", next)
+		if selected >= len(b) {
+			return nil, nil
+		}
+		return []int{selected}, nil
 	default:
-		// select branch by name
-		for i, branch := range b {
-			if len(branch.Name) == 0 {
-				continue
+		var indices []int
+		for i, br := range b {
+			match, err := filepath.Match(pattern, string(br.Name))
+			if err != nil {
+				return nil, fmt.Errorf("cannot match: %w", err)
 			}
-			if string(branch.Name) == next {
-				return i, nil
+			if match {
+				indices = append(indices, i)
 			}
 		}
-		return 0, fmt.Errorf("cannot select branch: no branch with name \"%s\"", next)
+		return indices, nil
 	}
 }
 
@@ -700,6 +703,10 @@ type policyBranchNodeElement struct {
 func (*policyBranchNodeElement) name() string { return "branch node" }
 
 func (e *policyBranchNodeElement) run(runner policyRunner) error {
+	if len(e.Branches) == 0 {
+		return errors.New("no branches")
+	}
+
 	selected, err := runner.runBranch(e.Branches)
 	if err != nil {
 		return err

@@ -397,44 +397,81 @@ func (r *policyExecuteRunner) notifyPolicyPCRDigest() error {
 }
 
 func (r *policyExecuteRunner) selectBranch(branches policyBranches) (int, string, error) {
+	// Pop the next supplied path component and find matching branches.
+	var candidateIndices []int
 	next, remaining := r.remaining.PopNextComponent()
-	if len(next) == 0 || next[0] == '*' {
-		// There are no more components or the next component is a wildcard match - build a
-		// list of candidate paths for this subtree
-		path, err := r.pathChooser.choose(branches)
+	switch next {
+	case "":
+		// Choose from all branches
+		for i := range branches {
+			candidateIndices = append(candidateIndices, i)
+		}
+	default:
+		// Filter branches
+		var err error
+		candidateIndices, err = branches.filterBranches(next)
 		if err != nil {
-			return 0, "", fmt.Errorf("cannot automatically select branch: %w", err)
+			return 0, "", fmt.Errorf("cannot filter branches with pattern %q: %w", next, err)
+		}
+	}
+
+	var selected int
+
+	switch len(candidateIndices) {
+	case 0:
+		return 0, "", fmt.Errorf("no branch with name that matches pattern %q", next) // next is never empty here
+	case 1:
+		selected = candidateIndices[0]
+		r.remaining = remaining
+	default:
+		// We have muliple candidate branches - try to automatically choose a path.
+		var candidateBranches policyBranches
+		for _, i := range candidateIndices {
+			candidateBranches = append(candidateBranches, branches[i])
+		}
+
+		path, err := r.pathChooser.choose(candidateBranches)
+		if err != nil {
+			var patternStr string
+			if next != "" {
+				patternStr = fmt.Sprintf(" with pattern %q", next)
+			}
+			return 0, "", fmt.Errorf("cannot automatically choose path from branches%s: %w", patternStr, err)
 		}
 
 		switch next {
 		case "":
-			// We have a path for this whole subtree
+			// Save the entire path chosen from this subtree.
 			r.remaining = path
 		case "**":
-			// Prepend the path for this whole subtree to the remaining components
+			// Special case for the greedy wildcard match. Prepend the entire path
+			// chosen from this subtree to the remaining components.
 			r.remaining = path.Concat(string(remaining))
-		case "*":
-			// Prepend the first component of the path for this subtree to the remaining components
+		default:
+			// Prepend the first component of the path chosen from this subtree
+			// to the remaining components.
 			component, _ := path.PopNextComponent()
 			r.remaining = policyBranchPath(component).Concat(string(remaining))
-		default:
-			panic("not reached")
 		}
 
-		// rerun
-		return r.selectBranch(branches)
-	}
-
-	// We have a branch selector
-	r.remaining = remaining
-	selected, err := branches.selectBranch(next)
-	if err != nil {
-		return 0, "", err
+		// Pop the next path component again and find matching branches. This
+		// shouldn't fail now.
+		next, remaining := r.remaining.PopNextComponent()
+		candidateIndices, err = branches.filterBranches(next)
+		switch {
+		case err != nil:
+			return 0, "", fmt.Errorf("internal error: cannot filter branches after automatically choosing path: %w", err)
+		case len(candidateIndices) != 1:
+			return 0, "", errors.New("internal error: unexpected number of branches after automatically choosing path")
+		default:
+			selected = candidateIndices[0]
+			r.remaining = remaining
+		}
 	}
 
 	name := string(branches[selected].Name)
 	if len(name) == 0 {
-		name = next
+		name = fmt.Sprintf("{%d}", selected)
 	}
 
 	return selected, name, nil
@@ -565,16 +602,17 @@ type PolicyExecuteParams struct {
 	// specifying the digest of the policy for the current session algorithm.
 	//
 	// If a component is "**", then Policy.Execute will attempt to automatically
-	// select an execution path for the entire sub-tree associated with the current
+	// choose an execution path for the entire sub-tree associated with the current
 	// branch node or authorized policy. This includes choosing additional
 	// branches and authorized policies encountered during the execution of the
 	// selected sub-tree. Remaining path components will be consumed when resuming
 	// execution in the original branch
 	//
-	// If a component is "*", then Policy.Execute will attempt to automatically
-	// select an immediate sub-branch or authorized policy, but additional branches
-	// and authorized policies encountered during the execution of the selected
-	// sub-tree will consume additional path components.
+	// A component can be a pattern that is compatible with filepath.Match. In the
+	// case where the pattern matches more than one branch, then Policy.Execute will
+	// attempt to automatically choose an immediate sub-branch or authorized policy,
+	// but additional branches and authorized policies encountered during the
+	// execution of the selected sub-tree will consume additional path components.
 	//
 	// If the path has insufficent components for the branch nodes or authorized policies
 	// encountered in a policy, Policy.Execute will attempt to select an appropriate

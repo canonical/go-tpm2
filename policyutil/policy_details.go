@@ -6,6 +6,8 @@ package policyutil
 
 import (
 	"bytes"
+	"fmt"
+	"path/filepath"
 
 	"github.com/canonical/go-tpm2"
 )
@@ -154,6 +156,7 @@ func (c *policyDetailsTreeWalkerBranchContext) beginBranchNode() (treeWalkerBran
 		next, remaining = c.nodeCtx.remaining.PopNextComponent()
 		if next == "**" {
 			consumeGreedy = true
+			next = "*"
 		}
 	}
 
@@ -188,16 +191,18 @@ func newPolicyDetailsTreeWalkerBranchNodeContext(alg tpm2.HashAlgorithmId, path,
 }
 
 func (c *policyDetailsTreeWalkerBranchNodeContext) beginBranch(name string) (treeWalkerBranchContext, error) {
-	switch {
-	case len(c.next) == 0:
+	switch len(c.next) {
+	case 0:
 		// handle this branch - there is no next component specified
-	case len(c.next) == 0 || c.next[0] == '*':
-		// handle this branch - there is a wildcard match
-	case c.next == name:
-		// handle this branch - the next component is a match
 	default:
-		// skip - the next component was specified, it's not a wildcard match and doesn't match this branch
-		return nil, errTreeWalkerSkipBranch
+		match, err := filepath.Match(c.next, name)
+		switch {
+		case err != nil:
+			return nil, fmt.Errorf("cannot match: %w", err)
+		case !match:
+			// skip - the next component was specified but it's not a match for this branch.
+			return nil, errTreeWalkerSkipBranch
+		}
 	}
 
 	branchCtx := &policyDetailsTreeWalkerBranchContext{

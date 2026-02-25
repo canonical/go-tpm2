@@ -2558,7 +2558,7 @@ func (s *policyExecuteSuite) TestPolicyBranchesSelectorOutOfRange(c *C) {
 	}
 
 	_, err = policy.Execute(NewTPMPolicySession(s.TPM, session), nil, nil, params)
-	c.Check(err, ErrorMatches, `cannot run 'branch node' task in root branch: cannot select branch: selected path 2 out of range`)
+	c.Check(err, ErrorMatches, `cannot run 'branch node' task in root branch: no branch with name that matches pattern "\{2\}"`)
 
 	var pe *PolicyError
 	c.Assert(err, internal_testutil.ErrorAs, &pe)
@@ -2591,7 +2591,7 @@ func (s *policyExecuteSuite) TestPolicyBranchesInvalidSelector(c *C) {
 	}
 
 	_, err = policy.Execute(NewTPMPolicySession(s.TPM, session), nil, nil, params)
-	c.Check(err, ErrorMatches, `cannot run 'branch node' task in root branch: cannot select branch: badly formatted path component "{foo}": expected integer`)
+	c.Check(err, ErrorMatches, `cannot run 'branch node' task in root branch: cannot filter branches with pattern "{foo}": bad index selector: expected integer`)
 
 	var pe *PolicyError
 	c.Assert(err, internal_testutil.ErrorAs, &pe)
@@ -2624,7 +2624,7 @@ func (s *policyExecuteSuite) TestPolicyBranchesBranchNotFound(c *C) {
 	}
 
 	_, err = policy.Execute(NewTPMPolicySession(s.TPM, session), nil, nil, params)
-	c.Check(err, ErrorMatches, `cannot run 'branch node' task in root branch: cannot select branch: no branch with name "foo"`)
+	c.Check(err, ErrorMatches, `cannot run 'branch node' task in root branch: no branch with name that matches pattern "foo"`)
 
 	var pe *PolicyError
 	c.Assert(err, internal_testutil.ErrorAs, &pe)
@@ -3185,7 +3185,7 @@ func (s *policyExecuteSuite) TestPolicyBranchesNVAutoSelectedFail(c *C) {
 	}
 
 	_, err = policy.Execute(NewTPMPolicySession(s.TPM, session), NewTPMPolicyResources(s.TPM, resources, nil), NewTPMHelper(s.TPM, nil), nil)
-	c.Check(err, ErrorMatches, `cannot run 'branch node' task in root branch: cannot automatically select branch: no appropriate paths found`)
+	c.Check(err, ErrorMatches, `cannot run 'branch node' task in root branch: cannot automatically choose path from branches: no appropriate paths found`)
 
 	var pe *PolicyError
 	c.Assert(err, internal_testutil.ErrorAs, &pe)
@@ -3272,7 +3272,7 @@ func (s *policyExecuteSuitePCR) TestPolicyBranchesAutoSelectFail(c *C) {
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
 	_, err = policy.Execute(NewTPMPolicySession(s.TPM, session), nil, NewTPMHelper(s.TPM, nil), nil)
-	c.Check(err, ErrorMatches, `cannot run 'branch node' task in root branch: cannot automatically select branch: no appropriate paths found`)
+	c.Check(err, ErrorMatches, `cannot run 'branch node' task in root branch: cannot automatically choose path from branches: no appropriate paths found`)
 
 	var pe *PolicyError
 	c.Assert(err, internal_testutil.ErrorAs, &pe)
