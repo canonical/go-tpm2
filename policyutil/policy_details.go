@@ -220,7 +220,7 @@ func (c *policyDetailsTreeWalkerBranchNodeContext) beginBranch(name string) (tre
 //
 // If the authorizedPolicies argument is supplied, details of branches from associated
 // authorized policies will be inserted into the result.
-func (p *Policy) Details(alg tpm2.HashAlgorithmId, path string, authorizedPolicies PolicyAuthorizedPolicies) (map[string]PolicyBranchDetails, error) {
+func (p *Policy) Details(alg tpm2.HashAlgorithmId, path string, authorizedPolicies AuthorizedPolicies) (map[string]PolicyBranchDetails, error) {
 	if alg == tpm2.HashAlgorithmNull {
 		if len(p.policy.PolicyDigests) == 0 {
 			return nil, ErrMissingDigest

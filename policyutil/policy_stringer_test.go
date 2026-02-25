@@ -58,7 +58,7 @@ Q24QvsY89QC+L3a2SRfoRs+9jlcc13V7qOxbu2vnI0+Ql7VP4ePUfEQ0
 	c.Assert(err, IsNil)
 	c.Check(authPolicy2.Authorize(rand.Reader, pub, []byte("foo"), key.(crypto.Signer), tpm2.HashAlgorithmSHA256), IsNil)
 
-	stringer := policy.Stringer(tpm2.HashAlgorithmNull, NewPolicyAuthorizedPolicies([]*Policy{authPolicy1, authPolicy2}, nil))
+	stringer := policy.Stringer(tpm2.HashAlgorithmNull, NewAuthorizedPolicies([]*Policy{authPolicy1, authPolicy2}, nil))
 	c.Check(stringer.String(), Equals, fmt.Sprintf(`
 Policy {
  # digest TPM_ALG_SHA256:%#[1]x

@@ -60,7 +60,7 @@ func (c *policyBranchesTreeWalkerBranchNodeContext) beginBranch(name string) (tr
 // to select the algorithm for encoding the path component for an authorized policy, which
 // is the policy digest. Setting this to [tpm2.HashAlgorithmNull] selects the first digest
 // algorithm that this policy is computed for.
-func (p *Policy) Branches(alg tpm2.HashAlgorithmId, authorizedPolicies PolicyAuthorizedPolicies) ([]string, error) {
+func (p *Policy) Branches(alg tpm2.HashAlgorithmId, authorizedPolicies AuthorizedPolicies) ([]string, error) {
 	if alg == tpm2.HashAlgorithmNull {
 		if len(p.policy.PolicyDigests) == 0 {
 			return nil, ErrMissingDigest

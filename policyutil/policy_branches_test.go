@@ -150,7 +150,7 @@ Q24QvsY89QC+L3a2SRfoRs+9jlcc13V7qOxbu2vnI0+Ql7VP4ePUfEQ0
 	c.Assert(err, IsNil)
 	c.Check(authPolicy2.Authorize(rand.Reader, pub, []byte("foo"), key.(crypto.Signer), tpm2.HashAlgorithmSHA256), IsNil)
 
-	branches, err := policy.Branches(tpm2.HashAlgorithmNull, NewPolicyAuthorizedPolicies([]*Policy{authPolicy1, authPolicy2}, nil))
+	branches, err := policy.Branches(tpm2.HashAlgorithmNull, NewAuthorizedPolicies([]*Policy{authPolicy1, authPolicy2}, nil))
 	c.Check(err, IsNil)
 	c.Check(branches, DeepEquals, []string{
 		"8fcd2169ab92694e0c633f1ab772842b8241bbc20288981fc7ac1eddc1fddb0e",

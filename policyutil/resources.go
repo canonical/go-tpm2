@@ -695,21 +695,21 @@ func (r *executePolicyResources) signedAuthorization(authKey tpm2.Name, policyRe
 	return r.resources.SignedAuthorization(r.session.Session().Params().HashAlg, r.session.Session().State().NonceTPM, authKey, policyRef)
 }
 
-// PolicyAuthorizedPolicies provides a way for [Policy.Branches], [Policy.Details] and
+// AuthorizedPolicies provides a way for [Policy.Branches], [Policy.Details] and
 // [Policy.Stringer] to access authorized policies that are required by a policy.
-type PolicyAuthorizedPolicies interface {
+type AuthorizedPolicies interface {
 	// AuthorizedPolicies returns a set of policies that are signed by the key with
 	// the specified name, appropriate for a TPM2_PolicyAuthorize assertion with the
 	// specified reference.
 	AuthorizedPolicies(keySign tpm2.Name, policyRef tpm2.Nonce) ([]*Policy, error)
 }
 
-type policyAuthorizedPolicies struct {
+type authorizedPolicies struct {
 	signedPolicies []*Policy
 	nvPolicies     []NVAuthorizedPolicy
 }
 
-func (p *policyAuthorizedPolicies) AuthorizedPolicies(keySign tpm2.Name, policyRef tpm2.Nonce) ([]*Policy, error) {
+func (p *authorizedPolicies) AuthorizedPolicies(keySign tpm2.Name, policyRef tpm2.Nonce) ([]*Policy, error) {
 	var out []*Policy
 	for _, policy := range p.signedPolicies {
 		for _, auth := range policy.policy.PolicyAuthorizations {
@@ -726,8 +726,8 @@ func (p *policyAuthorizedPolicies) AuthorizedPolicies(keySign tpm2.Name, policyR
 	return out, nil
 }
 
-func NewPolicyAuthorizedPolicies(policies []*Policy, nvPolicies []NVAuthorizedPolicy) PolicyAuthorizedPolicies {
-	return &policyAuthorizedPolicies{
+func NewAuthorizedPolicies(policies []*Policy, nvPolicies []NVAuthorizedPolicy) AuthorizedPolicies {
+	return &authorizedPolicies{
 		signedPolicies: policies,
 		nvPolicies:     nvPolicies,
 	}

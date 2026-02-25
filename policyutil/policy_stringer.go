@@ -25,7 +25,7 @@ type policyStringifierRunner struct {
 	currentPath policyBranchPath
 }
 
-func newPolicyStringifierRunner(alg tpm2.HashAlgorithmId, authorizedPolicies PolicyAuthorizedPolicies, w io.Writer) *policyStringifierRunner {
+func newPolicyStringifierRunner(alg tpm2.HashAlgorithmId, authorizedPolicies AuthorizedPolicies, w io.Writer) *policyStringifierRunner {
 	return &policyStringifierRunner{
 		w:               w,
 		policySession:   newStringifierPolicySession(alg, w, 0),
@@ -264,7 +264,7 @@ func (r *policyStringifierRunner) run(elements policyElements) error {
 	return nil
 }
 
-func (p *Policy) string(alg tpm2.HashAlgorithmId, authorizedPolicies PolicyAuthorizedPolicies) (string, error) {
+func (p *Policy) string(alg tpm2.HashAlgorithmId, authorizedPolicies AuthorizedPolicies) (string, error) {
 	var digest tpm2.Digest
 	if alg == tpm2.HashAlgorithmNull {
 		if len(p.policy.PolicyDigests) > 0 {
@@ -312,7 +312,7 @@ func (p *Policy) String() string {
 
 type policyStringer struct {
 	alg                tpm2.HashAlgorithmId
-	authorizedPolicies PolicyAuthorizedPolicies
+	authorizedPolicies AuthorizedPolicies
 	policy             *Policy
 }
 
@@ -331,7 +331,7 @@ func (s *policyStringer) String() string {
 // the algorithm is [tpm2.HashAlgorithmNull], then the first computed algorithm will be used.
 // If authorizedPolicies is supplied, the string representation will include the relevant
 // authorized policies as well.
-func (p *Policy) Stringer(alg tpm2.HashAlgorithmId, authorizedPolicies PolicyAuthorizedPolicies) fmt.Stringer {
+func (p *Policy) Stringer(alg tpm2.HashAlgorithmId, authorizedPolicies AuthorizedPolicies) fmt.Stringer {
 	return &policyStringer{
 		alg:                alg,
 		authorizedPolicies: authorizedPolicies,

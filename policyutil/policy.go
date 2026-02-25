@@ -1026,10 +1026,10 @@ func (*nullTickets) addTicket(ticket *PolicyTicket)     {}
 func (*nullTickets) invalidTicket(ticket *PolicyTicket) {}
 
 type mockPolicyResources struct {
-	authorized PolicyAuthorizedPolicies
+	authorized AuthorizedPolicies
 }
 
-func newMockPolicyResources(authorizedPolicies PolicyAuthorizedPolicies) *mockPolicyResources {
+func newMockPolicyResources(authorizedPolicies AuthorizedPolicies) *mockPolicyResources {
 	return &mockPolicyResources{
 		authorized: authorizedPolicies,
 	}

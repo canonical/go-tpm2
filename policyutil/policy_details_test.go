@@ -263,7 +263,7 @@ Q24QvsY89QC+L3a2SRfoRs+9jlcc13V7qOxbu2vnI0+Ql7VP4ePUfEQ0
 	c.Assert(err, IsNil)
 	c.Check(authPolicy2.Authorize(rand.Reader, pub, []byte("foo"), key.(crypto.Signer), tpm2.HashAlgorithmSHA256), IsNil)
 
-	details, err := policy.Details(tpm2.HashAlgorithmNull, "", NewPolicyAuthorizedPolicies([]*Policy{authPolicy1, authPolicy2}, nil))
+	details, err := policy.Details(tpm2.HashAlgorithmNull, "", NewAuthorizedPolicies([]*Policy{authPolicy1, authPolicy2}, nil))
 	c.Check(err, IsNil)
 	c.Check(details, internal_testutil.LenEquals, 2)
 
