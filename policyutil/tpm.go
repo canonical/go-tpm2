@@ -72,7 +72,7 @@ func WithTPMHelperNewPolicySessionFn(fn NewPolicySessionFn) TPMHelperOption {
 	}
 }
 
-// WithTPMHelperSession allows extra sessions to be supplied to TPM commands.
+// WithTPMHelperSessions allows extra sessions to be supplied to TPM commands.
 func WithTPMHelperSessions(sessions ...tpm2.SessionContext) TPMHelperOption {
 	return func(h *tpmHelper) {
 		h.sessions = sessions

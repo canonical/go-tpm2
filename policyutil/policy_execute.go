@@ -121,13 +121,17 @@ func (t *executePolicyTickets) currentTickets() (out []*PolicyTicket) {
 	return out
 }
 
+type executePolicyResourcesAuthorizer interface {
+	Authorize(tpm2.ResourceContext) error
+}
+
 type policyExecuteRunner struct {
 	policySessionContext SessionContext
 	policySession        *teePolicySession
 	policyTickets        *executePolicyTickets
 	policyResources      *executePolicyResources
 
-	authorizer Authorizer
+	authorizer executePolicyResourcesAuthorizer
 	tpm        TPMHelper
 
 	usage                *PolicySessionUsage
@@ -140,7 +144,7 @@ type policyExecuteRunner struct {
 	currentPath policyBranchPath
 }
 
-func newPolicyExecuteRunner(session PolicySession, tickets *executePolicyTickets, resources *executePolicyResources, authorizer Authorizer, tpm TPMHelper, params *PolicyExecuteParams, details *PolicyBranchDetails) *policyExecuteRunner {
+func newPolicyExecuteRunner(session PolicySession, tickets *executePolicyTickets, resources *executePolicyResources, authorizer executePolicyResourcesAuthorizer, tpm TPMHelper, params *PolicyExecuteParams, details *PolicyBranchDetails) *policyExecuteRunner {
 	return &policyExecuteRunner{
 		policySessionContext: session.Context(),
 		policySession: newTeePolicySession(
@@ -755,7 +759,7 @@ func (r *PolicyExecuteResult) NvWritten() (nvWrittenSet bool, set bool) {
 // On success, the supplied policy session may be used for authorization in a context that requires
 // that this policy is satisfied. Information about the result of executing the session is also
 // returned.
-func (p *Policy) Execute(session PolicySession, resources PolicyResources, tpm TPMHelper, params *PolicyExecuteParams) (result *PolicyExecuteResult, err error) {
+func (p *Policy) Execute(session PolicySession, resources PolicyExecuteResources, tpm TPMHelper, params *PolicyExecuteParams) (result *PolicyExecuteResult, err error) {
 	if session == nil {
 		return nil, errors.New("no session")
 	}

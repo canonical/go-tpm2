@@ -10,7 +10,6 @@ import (
 	"crypto/ecdsa"
 	"crypto/x509"
 	"encoding/pem"
-	"errors"
 	"fmt"
 
 	. "gopkg.in/check.v1"
@@ -35,39 +34,6 @@ func (c *mockSessionContext) Session() tpm2.SessionContext {
 func (c *mockSessionContext) Flush() error {
 	c.closed = true
 	return nil
-}
-
-type mockAuthorizer struct {
-	authorizeFn func(tpm2.ResourceContext) error
-}
-
-func (h *mockAuthorizer) Authorize(resource tpm2.ResourceContext) error {
-	if h.authorizeFn == nil {
-		return nil
-	}
-	return h.authorizeFn(resource)
-}
-
-type mockSignedAuthorizer struct {
-	signAuthorization func(tpm2.HashAlgorithmId, tpm2.Nonce, tpm2.Name, tpm2.Nonce) (*PolicySignedAuthorization, error)
-}
-
-func (h *mockSignedAuthorizer) SignedAuthorization(sessionAlg tpm2.HashAlgorithmId, sessionNonce tpm2.Nonce, authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
-	if h.signAuthorization == nil {
-		return nil, errors.New("not implemented")
-	}
-	return h.signAuthorization(sessionAlg, sessionNonce, authKey, policyRef)
-}
-
-type mockExternalSensitiveResources struct {
-	externalSensitive func(tpm2.Name) (*tpm2.Sensitive, error)
-}
-
-func (h *mockExternalSensitiveResources) ExternalSensitive(name tpm2.Name) (*tpm2.Sensitive, error) {
-	if h.externalSensitive == nil {
-		return nil, errors.New("not implemented")
-	}
-	return h.externalSensitive(name)
 }
 
 type policySuiteNoTPM struct{}
