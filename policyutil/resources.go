@@ -354,13 +354,15 @@ func (r *policyExecuteResources) LoadedResource(name tpm2.Name, policyParams *Lo
 
 		requireAuthValue := true
 		if parent.Policy() != nil {
-			params := &PolicyExecuteParams{
-				Tickets:              tickets,
-				Usage:                NewPolicySessionUsage(tpm2.CommandLoad, []NamedHandle{parent.Resource()}, object.Private, object.Public),
-				IgnoreAuthorizations: policyParams.IgnoreAuthorizations,
-				IgnoreNV:             policyParams.IgnoreNV,
-			}
-			result, err := parent.Policy().Execute(r.newPolicySession(r.tpm, session, r.sessions...), r, r.newTPMHelper(r.tpm, r.sessions...), params)
+			result, err := parent.Policy().Execute(
+				r.newPolicySession(r.tpm, session, r.sessions...),
+				WithPolicyExecuteResources(r),
+				WithExternalTPMHelper(r.newTPMHelper(r.tpm, r.sessions...)),
+				WithTickets(tickets),
+				WithSessionUsageConstraint(NewPolicySessionUsage(tpm2.CommandLoad, []NamedHandle{parent.Resource()}, object.Private, object.Public)),
+				WithIgnoreAuthorizationsConstraint(policyParams.IgnoreAuthorizations),
+				WithIgnoreNVConstraint(policyParams.IgnoreNV),
+			)
 			if err != nil {
 				return nil, nil, nil, fmt.Errorf("cannot execute policy session to authorize parent with name %#x: %w", parent.Resource().Name(), err)
 			}

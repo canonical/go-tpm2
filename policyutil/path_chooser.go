@@ -528,19 +528,19 @@ func (s *policyPathChooser) filterNVIncompatibleBranches() error {
 				defer session.Flush()
 
 				rc := tpm2.NewResourceContext(nv.Index, nv.Name)
-				params := &PolicyExecuteParams{
-					Usage: NewPolicySessionUsage(tpm2.CommandNVRead, []NamedHandle{rc, rc}, uint16(len(nv.OperandB)), nv.Offset).WithoutAuthValue(),
+				params := &policyExecuteParams{
+					tpm:   s.tpm,
+					usage: NewPolicySessionUsage(tpm2.CommandNVRead, []NamedHandle{rc, rc}, uint16(len(nv.OperandB)), nv.Offset).WithoutAuthValue(),
 				}
 
 				resources := new(nullPolicyResources)
 				tickets, _ := newExecutePolicyTickets(s.sessionAlg, nil, nil)
 				runner := newPolicyExecuteRunner(
 					policySession,
+					params,
 					tickets,
 					newExecutePolicyResources(session, resources, tickets, nil, nil),
 					resources,
-					s.tpm,
-					params,
 					new(PolicyBranchDetails),
 				)
 				if err := runner.run(info.policy.policy.Policy); err != nil {

@@ -89,9 +89,8 @@ func (s *policyExecuteSuite) testPolicyNV(c *C, data *testExecutePolicyNVData) e
 
 	result, err := policy.Execute(
 		NewPolicyExecuteSession(s.TPM, session),
-		NewPolicyExecuteResources(s.TPM, WithPersistentResources(persistent), WithAuthorizer(authorizer)),
-		NewTPMHelper(s.TPM),
-		nil,
+		WithResources(s.TPM, WithPersistentResources(persistent), WithAuthorizer(authorizer)),
+		WithTPMHelper(s.TPM),
 	)
 	if err != nil {
 		return err
@@ -436,14 +435,13 @@ func (s *policyExecuteSuite) testPolicySecret(c *C, data *testExecutePolicySecre
 
 	result, err := policy.Execute(
 		NewPolicyExecuteSession(s.TPM, session),
-		NewPolicyExecuteResources(
+		WithResources(
 			s.TPM,
 			WithPersistentResources(data.persistent),
 			WithTransientResources(data.transient),
 			WithAuthorizer(authorizer),
 		),
-		NewTPMHelper(s.TPM),
-		nil,
+		WithTPMHelper(s.TPM),
 	)
 	if err != nil {
 		return err
@@ -845,9 +843,8 @@ func (s *policyExecuteSuite) testPolicySigned(c *C, data *testExecutePolicySigne
 
 	result, err := policy.Execute(
 		NewPolicyExecuteSession(s.TPM, session),
-		NewPolicyExecuteResources(s.TPM, WithSignedAuthorizer(authorizer), WithExternalSensitiveGetter(externalSensitive)),
-		NewTPMHelper(s.TPM),
-		nil,
+		WithResources(s.TPM, WithSignedAuthorizer(authorizer), WithExternalSensitiveGetter(externalSensitive)),
+		WithTPMHelper(s.TPM),
 	)
 	if err != nil {
 		return err
@@ -1065,9 +1062,8 @@ func (s *policyExecuteSuite) TestPolicySignedWithTicket(c *C) {
 
 	result, err := policy.Execute(
 		NewPolicyExecuteSession(s.TPM, session),
-		NewPolicyExecuteResources(s.TPM, WithSignedAuthorizer(authorizer)),
-		NewTPMHelper(s.TPM),
-		nil,
+		WithResources(s.TPM, WithSignedAuthorizer(authorizer)),
+		WithTPMHelper(s.TPM),
 	)
 	c.Check(err, IsNil)
 	c.Check(result.NewTickets, internal_testutil.LenEquals, 1)
@@ -1085,9 +1081,7 @@ func (s *policyExecuteSuite) TestPolicySignedWithTicket(c *C) {
 
 	c.Check(s.TPM.PolicyRestart(session), IsNil)
 
-	params := &PolicyExecuteParams{Tickets: result.NewTickets}
-
-	result, err = policy.Execute(NewPolicyExecuteSession(s.TPM, session), nil, NewTPMHelper(s.TPM), params)
+	result, err = policy.Execute(NewPolicyExecuteSession(s.TPM, session), WithTPMHelper(s.TPM), WithTickets(result.NewTickets))
 	c.Check(err, IsNil)
 	c.Check(result.NewTickets, internal_testutil.LenEquals, 0)
 	c.Check(result.InvalidTickets, internal_testutil.LenEquals, 0)
@@ -1128,23 +1122,19 @@ func (s *policyExecuteSuite) testPolicyAuthorize(c *C, data *testExecutePolicyAu
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
-	params := &PolicyExecuteParams{
-		Path: data.path,
-	}
-
 	s.ForgetCommands()
 
 	result, err := policy.Execute(
 		NewPolicyExecuteSession(s.TPM, session),
-		NewPolicyExecuteResources(
+		WithResources(
 			s.TPM,
 			WithAuthorizedPolicies(data.authorizedPolicies),
 			WithAuthorizer(func(_ tpm2.ResourceContext) error {
 				return nil
 			}),
 		),
-		NewTPMHelper(s.TPM),
-		params,
+		WithTPMHelper(s.TPM),
+		WithPathConstraint(data.path),
 	)
 	if err != nil {
 		return err
@@ -1397,7 +1387,7 @@ func (s *policyExecuteSuite) TestPolicyAuthValue(c *C) {
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
-	result, err := policy.Execute(NewPolicyExecuteSession(s.TPM, session), nil, nil, nil)
+	result, err := policy.Execute(NewPolicyExecuteSession(s.TPM, session))
 	c.Check(err, IsNil)
 	c.Check(result.NewTickets, internal_testutil.LenEquals, 0)
 	c.Check(result.InvalidTickets, internal_testutil.LenEquals, 0)
@@ -1429,7 +1419,7 @@ func (s *policyExecuteSuite) testPolicyCommandCode(c *C, code tpm2.CommandCode) 
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
-	result, err := policy.Execute(NewPolicyExecuteSession(s.TPM, session), nil, nil, nil)
+	result, err := policy.Execute(NewPolicyExecuteSession(s.TPM, session))
 	c.Check(err, IsNil)
 	c.Check(result.NewTickets, internal_testutil.LenEquals, 0)
 	c.Check(result.InvalidTickets, internal_testutil.LenEquals, 0)
@@ -1472,7 +1462,7 @@ func (s *policyExecuteSuite) testPolicyCounterTimer(c *C, data *testExecutePolic
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
-	result, err := policy.Execute(NewPolicyExecuteSession(s.TPM, session), nil, nil, nil)
+	result, err := policy.Execute(NewPolicyExecuteSession(s.TPM, session))
 	if err != nil {
 		return err
 	}
@@ -1561,7 +1551,7 @@ func (s *policyExecuteSuite) testPolicyCpHash(c *C, data *testExecutePolicyCpHas
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
-	result, err := policy.Execute(NewPolicyExecuteSession(s.TPM, session), nil, nil, nil)
+	result, err := policy.Execute(NewPolicyExecuteSession(s.TPM, session))
 	c.Check(err, IsNil)
 	c.Check(result.NewTickets, internal_testutil.LenEquals, 0)
 	c.Check(result.InvalidTickets, internal_testutil.LenEquals, 0)
@@ -1606,7 +1596,7 @@ func (s *policyExecuteSuite) testPolicyNameHash(c *C, handles ...Named) {
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
-	result, err := policy.Execute(NewPolicyExecuteSession(s.TPM, session), nil, nil, nil)
+	result, err := policy.Execute(NewPolicyExecuteSession(s.TPM, session))
 	c.Check(err, IsNil)
 	c.Check(result.NewTickets, internal_testutil.LenEquals, 0)
 	c.Check(result.InvalidTickets, internal_testutil.LenEquals, 0)
@@ -1677,11 +1667,6 @@ func (s *policyExecuteSuite) testPolicyBranches(c *C, data *testExecutePolicyBra
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
-	params := &PolicyExecuteParams{
-		Usage:                data.usage,
-		Path:                 data.path,
-		IgnoreAuthorizations: data.ignoreAuthorizations,
-	}
 	authorizer := func(resource tpm2.ResourceContext) error {
 		c.Check(resource.Name(), DeepEquals, tpm2.MakeHandleName(tpm2.HandleOwner))
 		return nil
@@ -1694,9 +1679,11 @@ func (s *policyExecuteSuite) testPolicyBranches(c *C, data *testExecutePolicyBra
 
 	result, err := policy.Execute(
 		NewPolicyExecuteSession(s.TPM, session),
-		NewPolicyExecuteResources(s.TPM, WithAuthorizer(authorizer), WithSignedAuthorizer(signedAuthorizer)),
-		NewTPMHelper(s.TPM),
-		params,
+		WithResources(s.TPM, WithAuthorizer(authorizer), WithSignedAuthorizer(signedAuthorizer)),
+		WithTPMHelper(s.TPM),
+		WithSessionUsageConstraint(data.usage),
+		WithPathConstraint(data.path),
+		WithIgnoreAuthorizationsConstraint(data.ignoreAuthorizations),
 	)
 	c.Assert(err, IsNil)
 	c.Check(result.NewTickets, internal_testutil.LenEquals, 0)
@@ -1877,11 +1864,7 @@ func (s *policyExecuteSuite) TestPolicyBranchesMultipleDigests(c *C) {
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
-	params := &PolicyExecuteParams{
-		Path: "branch1",
-	}
-
-	result, err := policy.Execute(NewPolicyExecuteSession(s.TPM, session), nil, nil, params)
+	result, err := policy.Execute(NewPolicyExecuteSession(s.TPM, session), WithPathConstraint("branch1"))
 	c.Assert(err, IsNil)
 	c.Check(result.NewTickets, internal_testutil.LenEquals, 0)
 	c.Check(result.InvalidTickets, internal_testutil.LenEquals, 0)
@@ -1941,11 +1924,6 @@ func (s *policyExecuteSuite) testPolicyBranchesMultipleNodes(c *C, data *testExe
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
-	params := &PolicyExecuteParams{
-		Usage: data.usage,
-		Path:  data.path,
-	}
-
 	authorizer := func(resource tpm2.ResourceContext) error {
 		c.Check(resource.Name(), DeepEquals, tpm2.MakeHandleName(tpm2.HandleOwner))
 		return nil
@@ -1953,9 +1931,10 @@ func (s *policyExecuteSuite) testPolicyBranchesMultipleNodes(c *C, data *testExe
 
 	result, err := policy.Execute(
 		NewPolicyExecuteSession(s.TPM, session),
-		NewPolicyExecuteResources(s.TPM, WithAuthorizer(authorizer)),
-		NewTPMHelper(s.TPM),
-		params,
+		WithResources(s.TPM, WithAuthorizer(authorizer)),
+		WithTPMHelper(s.TPM),
+		WithSessionUsageConstraint(data.usage),
+		WithPathConstraint(data.path),
 	)
 	c.Assert(err, IsNil)
 	c.Check(result.NewTickets, internal_testutil.LenEquals, 0)
@@ -2265,11 +2244,6 @@ func (s *policyExecuteSuite) testPolicyBranchesEmbeddedNodes(c *C, data *testExe
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
-	params := &PolicyExecuteParams{
-		Usage: data.usage,
-		Path:  data.path,
-	}
-
 	authorizer := func(resource tpm2.ResourceContext) error {
 		c.Check(resource.Name(), DeepEquals, tpm2.MakeHandleName(tpm2.HandleOwner))
 		return nil
@@ -2277,9 +2251,10 @@ func (s *policyExecuteSuite) testPolicyBranchesEmbeddedNodes(c *C, data *testExe
 
 	result, err := policy.Execute(
 		NewPolicyExecuteSession(s.TPM, session),
-		NewPolicyExecuteResources(s.TPM, WithAuthorizer(authorizer)),
-		NewTPMHelper(s.TPM),
-		params,
+		WithResources(s.TPM, WithAuthorizer(authorizer)),
+		WithTPMHelper(s.TPM),
+		WithSessionUsageConstraint(data.usage),
+		WithPathConstraint(data.path),
 	)
 	c.Assert(err, IsNil)
 	c.Check(result.NewTickets, internal_testutil.LenEquals, 0)
@@ -2570,11 +2545,7 @@ func (s *policyExecuteSuite) TestPolicyBranchesSelectorOutOfRange(c *C) {
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
-	params := &PolicyExecuteParams{
-		Path: "{2}",
-	}
-
-	_, err = policy.Execute(NewPolicyExecuteSession(s.TPM, session), nil, nil, params)
+	_, err = policy.Execute(NewPolicyExecuteSession(s.TPM, session), WithPathConstraint("{2}"))
 	c.Check(err, ErrorMatches, `cannot run 'branch node' task in root branch: no branch with name that matches pattern "\{2\}"`)
 
 	var pe *PolicyError
@@ -2603,11 +2574,7 @@ func (s *policyExecuteSuite) TestPolicyBranchesBranchNotFound(c *C) {
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
-	params := &PolicyExecuteParams{
-		Path: "foo",
-	}
-
-	_, err = policy.Execute(NewPolicyExecuteSession(s.TPM, session), nil, nil, params)
+	_, err = policy.Execute(NewPolicyExecuteSession(s.TPM, session), WithPathConstraint("foo"))
 	c.Check(err, ErrorMatches, `cannot run 'branch node' task in root branch: no branch with name that matches pattern "foo"`)
 
 	var pe *PolicyError
@@ -2636,11 +2603,7 @@ func (s *policyExecuteSuite) TestPolicyBranchesMissingBranchDigests(c *C) {
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
-	params := &PolicyExecuteParams{
-		Path: "branch1",
-	}
-
-	_, err = policy.Execute(NewPolicyExecuteSession(s.TPM, session), nil, nil, params)
+	_, err = policy.Execute(NewPolicyExecuteSession(s.TPM, session), WithPathConstraint("branch1"))
 	c.Check(err, ErrorMatches, `cannot run 'branch node' task in branch 'branch1': missing digest for session algorithm`)
 	c.Check(err, internal_testutil.ErrorIs, ErrMissingDigest)
 
@@ -2657,7 +2620,7 @@ func (s *policyExecuteSuite) testPolicyPCRValues(c *C, values tpm2.PCRValues) er
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
-	result, err := policy.Execute(NewPolicyExecuteSession(s.TPM, session), nil, nil, nil)
+	result, err := policy.Execute(NewPolicyExecuteSession(s.TPM, session))
 	if err != nil {
 		return err
 	}
@@ -2733,7 +2696,7 @@ func (s *policyExecuteSuite) testPolicyPCRDigest(c *C, pcrDigest tpm2.Digest, pc
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
-	result, err := policy.Execute(NewPolicyExecuteSession(s.TPM, session), nil, nil, nil)
+	result, err := policy.Execute(NewPolicyExecuteSession(s.TPM, session))
 	if err != nil {
 		return err
 	}
@@ -2830,7 +2793,7 @@ func (s *policyExecuteSuite) testPolicyDuplicationSelect(c *C, data *testExecute
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
-	result, err := policy.Execute(NewPolicyExecuteSession(s.TPM, session), nil, nil, &PolicyExecuteParams{Usage: data.usage})
+	result, err := policy.Execute(NewPolicyExecuteSession(s.TPM, session), WithSessionUsageConstraint(data.usage))
 	c.Assert(err, IsNil)
 	c.Check(result.NewTickets, internal_testutil.LenEquals, 0)
 	c.Check(result.InvalidTickets, internal_testutil.LenEquals, 0)
@@ -2930,7 +2893,7 @@ func (s *policyExecuteSuite) TestPolicyPassword(c *C) {
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
-	result, err := policy.Execute(NewPolicyExecuteSession(s.TPM, session), nil, nil, nil)
+	result, err := policy.Execute(NewPolicyExecuteSession(s.TPM, session))
 	c.Assert(err, IsNil)
 	c.Check(result.NewTickets, internal_testutil.LenEquals, 0)
 	c.Check(result.InvalidTickets, internal_testutil.LenEquals, 0)
@@ -2962,7 +2925,7 @@ func (s *policyExecuteSuite) testPolicyNvWritten(c *C, writtenSet bool) {
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
-	result, err := policy.Execute(NewPolicyExecuteSession(s.TPM, session), nil, nil, nil)
+	result, err := policy.Execute(NewPolicyExecuteSession(s.TPM, session))
 	c.Assert(err, IsNil)
 	c.Check(result.NewTickets, internal_testutil.LenEquals, 0)
 	c.Check(result.InvalidTickets, internal_testutil.LenEquals, 0)
@@ -3004,10 +2967,10 @@ func (s *policyExecuteSuite) testPolicyOR(c *C, data *testExecutePolicyORData) {
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
-	_, err = data.policy.Execute(NewPolicyExecuteSession(s.TPM, session), nil, nil, nil)
+	_, err = data.policy.Execute(NewPolicyExecuteSession(s.TPM, session))
 	c.Check(err, IsNil)
 
-	result, err := policy.Execute(NewPolicyExecuteSession(s.TPM, session), nil, nil, nil)
+	result, err := policy.Execute(NewPolicyExecuteSession(s.TPM, session))
 	c.Assert(err, IsNil)
 	c.Check(result.NewTickets, internal_testutil.LenEquals, 0)
 	c.Check(result.InvalidTickets, internal_testutil.LenEquals, 0)
@@ -3107,9 +3070,8 @@ func (s *policyExecuteSuite) TestPolicyBranchesNVAutoSelected(c *C) {
 
 	result, err := policy.Execute(
 		NewPolicyExecuteSession(s.TPM, session),
-		NewPolicyExecuteResources(s.TPM, WithPersistentResources(persistent)),
-		NewTPMHelper(s.TPM),
-		nil,
+		WithResources(s.TPM, WithPersistentResources(persistent)),
+		WithTPMHelper(s.TPM),
 	)
 	c.Assert(err, IsNil)
 	c.Check(result.NewTickets, internal_testutil.LenEquals, 0)
@@ -3171,9 +3133,8 @@ func (s *policyExecuteSuite) TestPolicyBranchesNVAutoSelectedFail(c *C) {
 
 	_, err = policy.Execute(
 		NewPolicyExecuteSession(s.TPM, session),
-		NewPolicyExecuteResources(s.TPM, WithPersistentResources(persistent)),
-		NewTPMHelper(s.TPM),
-		nil,
+		WithResources(s.TPM, WithPersistentResources(persistent)),
+		WithTPMHelper(s.TPM),
 	)
 	c.Check(err, ErrorMatches, `cannot run 'branch node' task in root branch: cannot automatically choose path from branches: no appropriate paths found`)
 
@@ -3215,7 +3176,7 @@ func (s *policyExecuteSuitePCR) TestPolicyBranchesAutoSelected(c *C) {
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
-	result, err := policy.Execute(NewPolicyExecuteSession(s.TPM, session), nil, NewTPMHelper(s.TPM), nil)
+	result, err := policy.Execute(NewPolicyExecuteSession(s.TPM, session), WithTPMHelper(s.TPM))
 	c.Assert(err, IsNil)
 	c.Check(result.NewTickets, internal_testutil.LenEquals, 0)
 	c.Check(result.InvalidTickets, internal_testutil.LenEquals, 0)
@@ -3261,7 +3222,7 @@ func (s *policyExecuteSuitePCR) TestPolicyBranchesAutoSelectFail(c *C) {
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
-	_, err = policy.Execute(NewPolicyExecuteSession(s.TPM, session), nil, NewTPMHelper(s.TPM), nil)
+	_, err = policy.Execute(NewPolicyExecuteSession(s.TPM, session), WithTPMHelper(s.TPM))
 	c.Check(err, ErrorMatches, `cannot run 'branch node' task in root branch: cannot automatically choose path from branches: no appropriate paths found`)
 
 	var pe *PolicyError
