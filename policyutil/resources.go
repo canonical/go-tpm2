@@ -714,10 +714,6 @@ type PolicyAuthorizedPolicies interface {
 	AuthorizedPolicies(keySign tpm2.Name, policyRef tpm2.Nonce) ([]*Policy, error)
 }
 
-type PolicyAuthorizedPoliciesData struct {
-	AuthorizedPolicies []*Policy
-}
-
 type policyAuthorizedPolicies struct {
 	signedPolicies []*Policy
 	nvPolicies     []NVAuthorizedPolicy
