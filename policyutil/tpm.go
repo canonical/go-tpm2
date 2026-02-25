@@ -15,7 +15,7 @@ type TPMHelper interface {
 	// StartAuthSession returns an authorization session with the specified type and
 	// algorithm. It is required for any policy that includes TPM2_PolicySecret or
 	// TPM2_PolicyNV assertions.
-	StartAuthSession(sessionType tpm2.SessionType, alg tpm2.HashAlgorithmId) (SessionContext, PolicySession, error)
+	StartAuthSession(sessionType tpm2.SessionType, alg tpm2.HashAlgorithmId) (SessionContext, PolicyExecuteSession, error)
 
 	// LoadExternal loads the supplied external object into the TPM. It is required by
 	// any policy that includes TPM2_PolicySigned or TPM2_PolicyAuthorize assertions.
@@ -55,7 +55,7 @@ type TPMHelper interface {
 }
 
 type tpmHelper struct {
-	newPolicySession NewPolicySessionFn
+	newPolicySession NewPolicyExecuteSessionFn
 	tpm              *tpm2.TPMContext
 	sessions         []tpm2.SessionContext
 }
@@ -63,10 +63,10 @@ type tpmHelper struct {
 // TPMHelperOption is an option supplied to [NewTPMHelper].
 type TPMHelperOption func(*tpmHelper)
 
-// WithTPMHelperNewPolicySessionFn allows the function used to create a new
-// [PolicySession] in StartAuthSession to be overridden. The default is
-// [NewTPMPolicySession].
-func WithTPMHelperNewPolicySessionFn(fn NewPolicySessionFn) TPMHelperOption {
+// WithTPMHelperNewPolicyExecuteSessionFn allows the function used to create a new
+// [PolicyExecuteSession] in StartAuthSession to be overridden. The default is
+// [NewPolicyExecuteSession].
+func WithTPMHelperNewPolicyExecuteSessionFn(fn NewPolicyExecuteSessionFn) TPMHelperOption {
 	return func(h *tpmHelper) {
 		h.newPolicySession = fn
 	}
@@ -88,12 +88,12 @@ func NewTPMHelper(tpm *tpm2.TPMContext, options ...TPMHelperOption) TPMHelper {
 		opt(h)
 	}
 	if h.newPolicySession == nil {
-		h.newPolicySession = NewTPMPolicySession
+		h.newPolicySession = NewPolicyExecuteSession
 	}
 	return h
 }
 
-func (h *tpmHelper) StartAuthSession(sessionType tpm2.SessionType, alg tpm2.HashAlgorithmId) (SessionContext, PolicySession, error) {
+func (h *tpmHelper) StartAuthSession(sessionType tpm2.SessionType, alg tpm2.HashAlgorithmId) (SessionContext, PolicyExecuteSession, error) {
 	session, err := h.tpm.StartAuthSession(nil, nil, sessionType, nil, alg, h.sessions...)
 	if err != nil {
 		return nil, nil, err
@@ -151,7 +151,7 @@ func (h *tpmHelper) GetPermanentHandleAuthPolicy(handle tpm2.Handle) (tpm2.Tagge
 
 type nullTpmHelper struct{}
 
-func (*nullTpmHelper) StartAuthSession(sessionType tpm2.SessionType, alg tpm2.HashAlgorithmId) (SessionContext, PolicySession, error) {
+func (*nullTpmHelper) StartAuthSession(sessionType tpm2.SessionType, alg tpm2.HashAlgorithmId) (SessionContext, PolicyExecuteSession, error) {
 	return nil, nil, errors.New("no TPMHelper")
 }
 

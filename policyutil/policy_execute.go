@@ -144,7 +144,7 @@ type policyExecuteRunner struct {
 	currentPath policyBranchPath
 }
 
-func newPolicyExecuteRunner(session PolicySession, tickets *executePolicyTickets, resources *executePolicyResources, authorizer executePolicyResourcesAuthorizer, tpm TPMHelper, params *PolicyExecuteParams, details *PolicyBranchDetails) *policyExecuteRunner {
+func newPolicyExecuteRunner(session PolicyExecuteSession, tickets *executePolicyTickets, resources *executePolicyResources, authorizer executePolicyResourcesAuthorizer, tpm TPMHelper, params *PolicyExecuteParams, details *PolicyBranchDetails) *policyExecuteRunner {
 	return &policyExecuteRunner{
 		policySessionContext: session.Context(),
 		policySession: newTeePolicySession(
@@ -759,7 +759,7 @@ func (r *PolicyExecuteResult) NvWritten() (nvWrittenSet bool, set bool) {
 // On success, the supplied policy session may be used for authorization in a context that requires
 // that this policy is satisfied. Information about the result of executing the session is also
 // returned.
-func (p *Policy) Execute(session PolicySession, resources PolicyExecuteResources, tpm TPMHelper, params *PolicyExecuteParams) (result *PolicyExecuteResult, err error) {
+func (p *Policy) Execute(session PolicyExecuteSession, resources PolicyExecuteResources, tpm TPMHelper, params *PolicyExecuteParams) (result *PolicyExecuteResult, err error) {
 	if session == nil {
 		return nil, errors.New("no session")
 	}

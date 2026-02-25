@@ -154,7 +154,7 @@ type policyExecuteResources struct {
 	externalSensitiveGetter ExternalSensitiveGetter
 
 	newTPMHelper     NewTPMHelperFn
-	newPolicySession NewPolicySessionFn
+	newPolicySession NewPolicyExecuteSessionFn
 
 	persistent           []PersistentResource
 	transient            []TransientResource
@@ -240,8 +240,8 @@ func WithPolicyExecuteResourcesNewTPMHelperFn(fn NewTPMHelperFn) PolicyExecuteRe
 }
 
 // WithPolicyExecuteResourcesNewPolicySessionFn allows the function used to create a new
-// [PolicySession] to be overridden. The default is [NewTPMPolicySession].
-func WithPolicyExecuteResourcesNewPolicySessionFn(fn NewPolicySessionFn) PolicyExecuteResourcesOption {
+// [PolicySession] to be overridden. The default is [NewPolicyExecuteSession].
+func WithPolicyExecuteResourcesNewPolicySessionFn(fn NewPolicyExecuteSessionFn) PolicyExecuteResourcesOption {
 	return func(r *policyExecuteResources) {
 		r.newPolicySession = fn
 	}
@@ -264,13 +264,13 @@ func NewPolicyExecuteResources(tpm *tpm2.TPMContext, options ...PolicyExecuteRes
 		opt(r)
 	}
 	if r.newPolicySession == nil {
-		r.newPolicySession = NewTPMPolicySession
+		r.newPolicySession = NewPolicyExecuteSession
 	}
 	if r.newTPMHelper == nil {
 		r.newTPMHelper = func(tpm *tpm2.TPMContext, sessions ...tpm2.SessionContext) TPMHelper {
 			return NewTPMHelper(
 				tpm,
-				WithTPMHelperNewPolicySessionFn(r.newPolicySession),
+				WithTPMHelperNewPolicyExecuteSessionFn(r.newPolicySession),
 				WithTPMHelperSessions(sessions...),
 			)
 		}

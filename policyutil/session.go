@@ -21,8 +21,8 @@ type SessionContext interface {
 	Flush()
 }
 
-// PolicySession corresponds to a policy session
-type PolicySession interface {
+// PolicyExecuteSession corresponds to a policy session used by [Policy.Execute].
+type PolicyExecuteSession interface {
 	Context() SessionContext
 
 	Name() tpm2.Name
@@ -93,16 +93,16 @@ func (s *tpmSessionContext) Flush() {
 	s.tpm.FlushContext(s.session)
 }
 
-type NewPolicySessionFn func(*tpm2.TPMContext, tpm2.SessionContext, ...tpm2.SessionContext) PolicySession
+type NewPolicyExecuteSessionFn func(*tpm2.TPMContext, tpm2.SessionContext, ...tpm2.SessionContext) PolicyExecuteSession
 
-// tpmPolicySession is an implementation of policySession that runs on a TPM
+// tpmPolicySession is the internal implementation of PolicyExecuteSession.
 type tpmPolicySession struct {
 	tpm           *tpm2.TPMContext
 	policySession SessionContext
 	sessions      []tpm2.SessionContext
 }
 
-func NewTPMPolicySession(tpm *tpm2.TPMContext, policySession tpm2.SessionContext, sessions ...tpm2.SessionContext) PolicySession {
+func NewPolicyExecuteSession(tpm *tpm2.TPMContext, policySession tpm2.SessionContext, sessions ...tpm2.SessionContext) PolicyExecuteSession {
 	return &tpmPolicySession{
 		tpm:           tpm,
 		policySession: newTpmSessionContext(tpm, policySession),
@@ -186,7 +186,7 @@ func (s *tpmPolicySession) PolicyNvWritten(writtenSet bool) error {
 	return s.tpm.PolicyNvWritten(s.policySession.Session(), writtenSet, s.sessions...)
 }
 
-// computePolicySession is an implementation of Session that computes a
+// computePolicySession is an implementation of policySession that computes a
 // digest from a sequence of assertions.
 type computePolicySession struct {
 	alg          tpm2.HashAlgorithmId
