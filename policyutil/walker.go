@@ -82,10 +82,7 @@ func newTreeWalker(resources policyResources, rootBranchNodeCtx treeWalkerBranch
 }
 
 func (w *treeWalker) walkBranch(branchNodeCtx treeWalkerBranchNodeContext, index int, branch *policyBranch, remaining []policyElementRunner) error {
-	name := string(branch.Name)
-	if len(name) == 0 {
-		name = fmt.Sprintf("{%d}", index)
-	}
+	name := branch.name()
 
 	branchCtx, err := branchNodeCtx.beginBranch(name)
 	if err != nil {

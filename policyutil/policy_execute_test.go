@@ -2565,39 +2565,6 @@ func (s *policyExecuteSuite) TestPolicyBranchesSelectorOutOfRange(c *C) {
 	c.Check(pe.Path, Equals, "")
 }
 
-func (s *policyExecuteSuite) TestPolicyBranchesInvalidSelector(c *C) {
-	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
-	builder.RootBranch().PolicyNvWritten(true)
-
-	builder.RootBranch().AddBranchNode(func(n *PolicyBuilderBranchNode) {
-		n.AddBranch("branch1", func(b *PolicyBuilderBranch) {
-			b.PolicyAuthValue()
-		})
-
-		n.AddBranch("branch2", func(b *PolicyBuilderBranch) {
-			b.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo"))
-		})
-	})
-
-	builder.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth)
-
-	_, policy, err := builder.Policy()
-	c.Assert(err, IsNil)
-
-	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
-
-	params := &PolicyExecuteParams{
-		Path: "{foo}",
-	}
-
-	_, err = policy.Execute(NewTPMPolicySession(s.TPM, session), nil, nil, params)
-	c.Check(err, ErrorMatches, `cannot run 'branch node' task in root branch: cannot filter branches with pattern "{foo}": bad index selector: expected integer`)
-
-	var pe *PolicyError
-	c.Assert(err, internal_testutil.ErrorAs, &pe)
-	c.Check(pe.Path, Equals, "")
-}
-
 func (s *policyExecuteSuite) TestPolicyBranchesBranchNotFound(c *C) {
 	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
 	builder.RootBranch().PolicyNvWritten(true)

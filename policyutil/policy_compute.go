@@ -54,17 +54,12 @@ func (r *policyComputeRunner) runBranch(branches policyBranches) (selected int, 
 		return 0, err
 	}
 
-	for i, branch := range branches {
-		name := string(branch.Name)
-		if len(name) == 0 {
-			name = fmt.Sprintf("{%d}", i)
-		}
-
+	for _, branch := range branches {
 		computedDigest, err := func() (tpm2.Digest, error) {
 			origPolicySession := r.policySession
 			origPath := r.currentPath
 			r.policySession = newComputePolicySession(r.session().HashAlg(), currentDigest, true)
-			r.currentPath = r.currentPath.Concat(name)
+			r.currentPath = r.currentPath.Concat(branch.name())
 			defer func() {
 				r.policySession = origPolicySession
 				r.currentPath = origPath

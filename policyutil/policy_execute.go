@@ -469,12 +469,7 @@ func (r *policyExecuteRunner) selectBranch(branches policyBranches) (int, string
 		}
 	}
 
-	name := string(branches[selected].Name)
-	if len(name) == 0 {
-		name = fmt.Sprintf("{%d}", selected)
-	}
-
-	return selected, name, nil
+	return selected, branches[selected].name(), nil
 }
 
 func (r *policyExecuteRunner) run(elements policyElements) error {

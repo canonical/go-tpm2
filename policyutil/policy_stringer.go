@@ -168,11 +168,7 @@ func (r *policyStringifierRunner) runBranch(branches policyBranches) (selected i
 			r.depth++
 			r.depth += ((treeDepth - 1) * 2)
 			r.policySession = newStringifierPolicySession(r.policySession.HashAlg(), r.w, r.depth)
-			name := string(branch.Name)
-			if len(name) == 0 {
-				name = fmt.Sprintf("{%d}", i)
-			}
-			r.currentPath = r.currentPath.Concat(name)
+			r.currentPath = r.currentPath.Concat(branch.name())
 			defer func() {
 				r.depth = origDepth
 				r.policySession = origSession

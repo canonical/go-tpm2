@@ -195,8 +195,7 @@ func (c *policyDetailsTreeWalkerBranchNodeContext) beginBranch(name string) (tre
 	case 0:
 		// handle this branch - there is no next component specified
 	default:
-		match, err := filepath.Match(c.next, name)
-		switch {
+		switch match, err := filepath.Match(c.next, name); {
 		case err != nil:
 			return nil, fmt.Errorf("cannot match: %w", err)
 		case !match:

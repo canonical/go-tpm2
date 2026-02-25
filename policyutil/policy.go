@@ -13,6 +13,7 @@ import (
 	"io"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -652,38 +653,67 @@ type policyBranch struct {
 	Name          policyBranchName
 	PolicyDigests taggedHashList
 	Policy        policyElements
+
+	index int `tpm2:"ignore"` // index of this branch in a branch node
+}
+
+func (b *policyBranch) name() string {
+	switch len(b.Name) {
+	case 0:
+		return "{" + strconv.Itoa(b.index) + "}"
+	default:
+		return string(b.Name)
+	}
+}
+
+func (b *policyBranch) nameMatches(pattern string) (bool, error) {
+	names := []string{"{" + strconv.Itoa(b.index) + "}"}
+	if len(b.Name) > 0 {
+		names = append(names, string(b.Name))
+	}
+	for _, name := range names {
+		switch match, err := filepath.Match(pattern, name); {
+		case err != nil:
+			return false, err
+		case match:
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 type policyBranches []*policyBranch
 
 func (b policyBranches) filterBranches(pattern string) ([]int, error) {
-	switch {
-	case pattern[0] == '{':
-		// return a single branch by index
-		var selected int
-		if _, err := fmt.Sscanf(pattern, "{%d}", &selected); err != nil {
-			return nil, fmt.Errorf("bad index selector: %w", err)
+	var indices []int
+	for i, br := range b {
+		switch match, err := br.nameMatches(pattern); {
+		case err != nil:
+			return nil, fmt.Errorf("cannot match: %w", err)
+		case match:
+			indices = append(indices, i)
 		}
-		if selected < 0 {
-			return nil, fmt.Errorf("bad index selector %d: is negative", selected)
-		}
-		if selected >= len(b) {
-			return nil, nil
-		}
-		return []int{selected}, nil
-	default:
-		var indices []int
-		for i, br := range b {
-			match, err := filepath.Match(pattern, string(br.Name))
-			if err != nil {
-				return nil, fmt.Errorf("cannot match: %w", err)
-			}
-			if match {
-				indices = append(indices, i)
-			}
-		}
-		return indices, nil
 	}
+	return indices, nil
+}
+
+func (b policyBranches) Marshal(w io.Writer) error {
+	_, err := mu.MarshalToWriter(w, []*policyBranch(b))
+	return err
+}
+
+func (b *policyBranches) Unmarshal(r io.Reader) error {
+	var branches []*policyBranch
+	if _, err := mu.UnmarshalFromReader(r, &branches); err != nil {
+		return err
+	}
+
+	for i, branch := range branches {
+		branch.index = i
+	}
+
+	*b = policyBranches(branches)
+	return nil
 }
 
 type policyORElement struct {

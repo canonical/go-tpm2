@@ -125,6 +125,7 @@ func (n *PolicyBuilderBranchNode) AddBranch(name string, fn PolicyBuilderBranchC
 	}
 	if len(b.policyBranch.Policy) > 0 {
 		// only include branches with assertions.
+		b.policyBranch.index = len(n.childBranches)
 		n.childBranches = append(n.childBranches, b)
 	}
 
