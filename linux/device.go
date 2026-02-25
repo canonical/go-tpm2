@@ -397,8 +397,15 @@ type RMDevice struct {
 	raw *DirectDevice
 }
 
-// DirectDevice returns the corresponding raw device.
+// DirectDevice returns the corresponding direct device.
 func (d *RMDevice) DirectDevice() *DirectDevice {
+	return d.raw
+}
+
+// RawDevice returns the corresponding raw device.
+//
+// Deprecated: use DirectDevice.
+func (d *RMDevice) RawDevice() *RawDevice {
 	return d.raw
 }
 
