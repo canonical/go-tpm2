@@ -2135,6 +2135,31 @@ func (s *policyExecuteSuite) TestPolicyBranchesMultipleNodesAutoSelectWithUsage3
 		expectedCommandCode:      tpm2.CommandNVWriteLock})
 }
 
+func (s *policyExecuteSuite) TestPolicyBranchesMultipleNodesAutoSelectWithUsage4(c *C) {
+	s.testPolicyBranchesMultipleNodes(c, &testExecutePolicyBranchesMultipleNodesData{
+		constraints: []PolicyExecuteOption{
+			WithSessionUsageCommandCodeConstraint(tpm2.CommandNVWriteLock),
+			WithSessionUsageNoAuthValueConstraint(),
+		},
+		expectedCommands: tpm2.CommandCodeList{
+			tpm2.CommandPolicyNvWritten,
+			tpm2.CommandContextSave,
+			tpm2.CommandContextLoad,
+			tpm2.CommandGetCapability,
+			tpm2.CommandContextSave,
+			tpm2.CommandStartAuthSession,
+			tpm2.CommandContextLoad,
+			tpm2.CommandPolicySecret,
+			tpm2.CommandFlushContext,
+			tpm2.CommandPolicyOR,
+			tpm2.CommandPolicyCommandCode,
+			tpm2.CommandPolicyOR,
+		},
+		expectedRequireAuthValue: false,
+		expectedPath:             "branch2/branch4",
+		expectedCommandCode:      tpm2.CommandNVWriteLock})
+}
+
 func (s *policyExecuteSuite) TestPolicyBranchesMultipleNodesAutoSelectOneWithUsage(c *C) {
 	s.testPolicyBranchesMultipleNodes(c, &testExecutePolicyBranchesMultipleNodesData{
 		constraints: []PolicyExecuteOption{

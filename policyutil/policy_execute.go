@@ -613,7 +613,9 @@ func WithSessionUsageHandlesContraint(handles ...NamedHandle) PolicyExecuteOptio
 	}
 	return func(p *policyExecuteParams) {
 		p.usage = policySessionUsageConstraints{
+			hasCommand:  p.usage.hasCommand,
 			hasHandles:  true,
+			commandCode: p.usage.commandCode,
 			handles:     handles,
 			noAuthValue: p.usage.noAuthValue,
 		}
@@ -638,6 +640,22 @@ func WithSessionUsageCommandConstraint(commandCode tpm2.CommandCode, handles []N
 			commandCode: commandCode,
 			handles:     handles,
 			params:      params,
+			noAuthValue: p.usage.noAuthValue,
+		}
+	}
+}
+
+// WithSessionUsageCommandCodeConstraint tells [Policy.Execute] which command will be used
+// with the executed policy, and assists with automatically choosing branches where a
+// policy has branches containing TPM2_PolicyCommandCode assertions.
+func WithSessionUsageCommandCodeConstraint(commandCode tpm2.CommandCode) PolicyExecuteOption {
+	return func(p *policyExecuteParams) {
+		p.usage = policySessionUsageConstraints{
+			hasCommand:  true,
+			hasHandles:  p.usage.hasHandles,
+			commandCode: commandCode,
+			handles:     p.usage.handles,
+			authIndex:   p.usage.authIndex,
 			noAuthValue: p.usage.noAuthValue,
 		}
 	}
