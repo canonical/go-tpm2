@@ -400,13 +400,13 @@ func (r *policyExecuteRunner) runAuthorizedPolicy(keySign *tpm2.Public, policyRe
 }
 
 func (r *policyExecuteRunner) signedAuthorization(authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
-	auth, err := r.policyResources.signedAuthorization(r.policySessionContext.Session().Params().HashAlg, r.policySessionContext.Session().State().NonceTPM, authKey, policyRef)
+	auth, err := r.policyResources.signedAuthorization(r.policySessionContext.Params().HashAlg, r.policySessionContext.State().NonceTPM, authKey, policyRef)
 	if err != nil {
 		return nil, err
 	}
 
 	if r.usage.canCpHash() && len(auth.CpHash) > 0 {
-		usageCpHash, err := r.usage.cpHash(r.policySessionContext.Session().Params().HashAlg)
+		usageCpHash, err := r.usage.cpHash(r.policySessionContext.Params().HashAlg)
 		if err != nil {
 			return nil, fmt.Errorf("cannot obtain cpHash from usage parameters: %w", err)
 		}

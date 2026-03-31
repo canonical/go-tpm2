@@ -560,7 +560,7 @@ func (s *policyPathChooser) filterNVIncompatibleBranches() error {
 					return nvAssertionStatusIndeterminate, nil
 				}
 
-				data, err := s.tpm.NVRead(info.resource, info.resource, uint16(len(nv.OperandB)), nv.Offset, session.Session())
+				data, err := s.tpm.NVRead(info.resource, info.resource, uint16(len(nv.OperandB)), nv.Offset, session)
 				if err != nil {
 					// ignore NVRead error
 					return nvAssertionStatusIndeterminate, nil

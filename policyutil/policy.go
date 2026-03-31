@@ -417,7 +417,7 @@ func (e *policyNVElement) run(runner policyRunner) (err error) {
 	}
 	defer authSession.Flush()
 
-	if err := runner.session().PolicyNV(auth, nvIndex, e.OperandB, e.Offset, e.Operation, authSession.Session()); err != nil {
+	if err := runner.session().PolicyNV(auth, nvIndex, e.OperandB, e.Offset, e.Operation, authSession); err != nil {
 		return &PolicyNVError{Index: nvIndex.Handle(), Name: nvIndex.Name(), err: err}
 	}
 
@@ -477,7 +477,7 @@ func (e *policySecretElement) run(runner policyRunner) (err error) {
 	}
 	defer authSession.Flush()
 
-	timeout, ticket, err := runner.session().PolicySecret(authObject, e.CpHashA, e.PolicyRef, e.Expiration, authSession.Session())
+	timeout, ticket, err := runner.session().PolicySecret(authObject, e.CpHashA, e.PolicyRef, e.Expiration, authSession)
 	if err != nil {
 		return &PolicyAuthorizationError{AuthName: e.AuthObjectName, PolicyRef: e.PolicyRef, err: err}
 	}
