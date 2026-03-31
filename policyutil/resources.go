@@ -16,9 +16,9 @@ import (
 
 // ResourceContext corresponds to a resource on the TPM.
 type ResourceContext interface {
-	Resource() tpm2.ResourceContext // The actual resource
-	Policy() *Policy                // The policy associated with this resource, if there is one
-	Flush()                         // Flush the resource once it's no longer needed
+	tpm2.ResourceContext
+	Policy() *Policy // The policy associated with this resource, if there is one
+	Flush()          // Flush the resource once it's no longer needed
 }
 
 // LoadPolicyParams contains parameters for policy sessions that are required to execute
@@ -106,19 +106,15 @@ type TransientResource struct {
 }
 
 type resourceContext struct {
-	resource tpm2.ResourceContext
-	policy   *Policy
+	tpm2.ResourceContext
+	policy *Policy
 }
 
 func newResourceContext(resource tpm2.ResourceContext, policy *Policy) *resourceContext {
 	return &resourceContext{
-		resource: resource,
-		policy:   policy,
+		ResourceContext: resource,
+		policy:          policy,
 	}
-}
-
-func (r *resourceContext) Resource() tpm2.ResourceContext {
-	return r.resource
 }
 
 func (r *resourceContext) Policy() *Policy {
@@ -135,15 +131,15 @@ type tpmResourceContextFlushable struct {
 func newTpmResourceContextFlushable(tpm *tpm2.TPMContext, resource tpm2.ResourceContext, policy *Policy) *tpmResourceContextFlushable {
 	return &tpmResourceContextFlushable{
 		resourceContext: resourceContext{
-			resource: resource,
-			policy:   policy,
+			ResourceContext: resource,
+			policy:          policy,
 		},
 		tpm: tpm,
 	}
 }
 
 func (r *tpmResourceContextFlushable) Flush() {
-	r.tpm.FlushContext(r.resource)
+	r.tpm.FlushContext(r)
 }
 
 type policyExecuteResources struct {
@@ -346,9 +342,9 @@ func (r *policyExecuteResources) LoadedResource(name tpm2.Name, policyParams *Lo
 			sessionType = tpm2.SessionTypePolicy
 		}
 
-		session, err := r.tpm.StartAuthSession(nil, nil, sessionType, nil, parent.Resource().Name().Algorithm(), r.sessions...)
+		session, err := r.tpm.StartAuthSession(nil, nil, sessionType, nil, parent.Name().Algorithm(), r.sessions...)
 		if err != nil {
-			return nil, nil, nil, fmt.Errorf("cannot start session to authorize parent with name %#x: %w", parent.Resource().Name(), err)
+			return nil, nil, nil, fmt.Errorf("cannot start session to authorize parent with name %#x: %w", parent.Name(), err)
 		}
 		defer r.tpm.FlushContext(session)
 
@@ -359,12 +355,12 @@ func (r *policyExecuteResources) LoadedResource(name tpm2.Name, policyParams *Lo
 				WithPolicyExecuteResources(r),
 				WithExternalTPMHelper(r.newTPMHelper(r.tpm, r.sessions...)),
 				WithTickets(tickets),
-				WithSessionUsageCommandConstraint(tpm2.CommandLoad, []NamedHandle{parent.Resource()}, object.Private, object.Public),
+				WithSessionUsageCommandConstraint(tpm2.CommandLoad, []NamedHandle{parent}, object.Private, object.Public),
 				WithIgnoreAuthorizationsConstraint(policyParams.IgnoreAuthorizations),
 				WithIgnoreNVConstraint(policyParams.IgnoreNV),
 			)
 			if err != nil {
-				return nil, nil, nil, fmt.Errorf("cannot execute policy session to authorize parent with name %#x: %w", parent.Resource().Name(), err)
+				return nil, nil, nil, fmt.Errorf("cannot execute policy session to authorize parent with name %#x: %w", parent.Name(), err)
 			}
 			requireAuthValue = result.AuthValueNeeded
 
@@ -389,12 +385,12 @@ func (r *policyExecuteResources) LoadedResource(name tpm2.Name, policyParams *Lo
 		}
 
 		if requireAuthValue {
-			if err := r.Authorize(parent.Resource()); err != nil {
-				return nil, nil, nil, fmt.Errorf("cannot authorize parent with name %#x: %w", parent.Resource().Name(), err)
+			if err := r.Authorize(parent); err != nil {
+				return nil, nil, nil, fmt.Errorf("cannot authorize parent with name %#x: %w", parent.Name(), err)
 			}
 		}
 
-		resource, err := r.tpm.Load(parent.Resource(), object.Private, object.Public, session, r.sessions...)
+		resource, err := r.tpm.Load(parent, object.Private, object.Public, session, r.sessions...)
 		if err != nil {
 			return nil, nil, nil, err
 		}
@@ -651,10 +647,10 @@ func (r *executePolicyResources) loadedResource(name tpm2.Name) (ResourceContext
 		return nil, err
 	}
 
-	switch resource.Resource().Handle().Type() {
+	switch resource.Handle().Type() {
 	case tpm2.HandleTypeTransient:
 		policy := resource.Policy()
-		if context := r.resources.ContextSave(resource.Resource()); context != nil {
+		if context := r.resources.ContextSave(resource); context != nil {
 			r.cachedResources[makeNameMapKey(name)] = cachedResource{
 				typ:    cachedResourceTypeContext,
 				data:   mu.MustMarshalToBytes(context),
@@ -664,7 +660,7 @@ func (r *executePolicyResources) loadedResource(name tpm2.Name) (ResourceContext
 	default:
 		r.cachedResources[makeNameMapKey(name)] = cachedResource{
 			typ:    cachedResourceTypeResource,
-			data:   resource.Resource().SerializeToBytes(),
+			data:   resource.SerializeToBytes(),
 			policy: resource.Policy(),
 		}
 	}

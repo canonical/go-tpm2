@@ -196,7 +196,7 @@ func (r *policyExecuteRunner) loadExternal(public *tpm2.Public) (ResourceContext
 func (r *policyExecuteRunner) authorize(auth ResourceContext, askForPolicy bool, commandParams *authorizationCommandParams, prefer tpm2.SessionType) (sessionOut SessionContext, err error) {
 	policy := auth.Policy()
 	if policy == nil && askForPolicy {
-		policy, err = r.policyResources.policy(auth.Resource().Name())
+		policy, err = r.policyResources.policy(auth.Name())
 		if err != nil {
 			return nil, fmt.Errorf("cannot load policy: %w", err)
 		}
@@ -214,9 +214,9 @@ func (r *policyExecuteRunner) authorize(auth ResourceContext, askForPolicy bool,
 
 	var alg tpm2.HashAlgorithmId
 
-	switch auth.Resource().Handle().Type() {
+	switch auth.Handle().Type() {
 	case tpm2.HandleTypeNVIndex:
-		pub, err := r.tpm.NVReadPublic(auth.Resource())
+		pub, err := r.tpm.NVReadPublic(auth)
 		if err != nil {
 			return nil, fmt.Errorf("cannot obtain NVPublic: %w", err)
 		}
@@ -228,11 +228,11 @@ func (r *policyExecuteRunner) authorize(auth ResourceContext, askForPolicy bool,
 			// index only supports policy read
 			availableSessionTypes[tpm2.SessionTypeHMAC] = false
 		}
-		alg = auth.Resource().Name().Algorithm()
+		alg = auth.Name().Algorithm()
 	case tpm2.HandleTypePermanent:
 		// Auth value is always available for permanent resources. Auth policy
 		// is available if
-		policyDigest, err := r.tpm.GetPermanentHandleAuthPolicy(auth.Resource().Handle())
+		policyDigest, err := r.tpm.GetPermanentHandleAuthPolicy(auth.Handle())
 		if err != nil {
 			return nil, fmt.Errorf("cannot obtain permanent handle auth policy: %w", err)
 		}
@@ -246,7 +246,7 @@ func (r *policyExecuteRunner) authorize(auth ResourceContext, askForPolicy bool,
 			alg = policyDigest.HashAlg
 		}
 	case tpm2.HandleTypeTransient, tpm2.HandleTypePersistent:
-		pub, err := r.tpm.ReadPublic(auth.Resource())
+		pub, err := r.tpm.ReadPublic(auth)
 		if err != nil {
 			return nil, fmt.Errorf("cannot obtain Public: %w", err)
 		}
@@ -254,7 +254,7 @@ func (r *policyExecuteRunner) authorize(auth ResourceContext, askForPolicy bool,
 			// object only supports policy for user role
 			availableSessionTypes[tpm2.SessionTypeHMAC] = false
 		}
-		alg = auth.Resource().Name().Algorithm()
+		alg = auth.Name().Algorithm()
 	default:
 		return nil, errors.New("unexpected handle type")
 	}
@@ -327,7 +327,7 @@ func (r *policyExecuteRunner) authorize(auth ResourceContext, askForPolicy bool,
 	}
 
 	if authValueNeeded {
-		if err := r.authorizer.Authorize(auth.Resource()); err != nil {
+		if err := r.authorizer.Authorize(auth); err != nil {
 			return nil, fmt.Errorf("cannot authorize resource: %w", err)
 		}
 	}
@@ -385,7 +385,7 @@ func (r *policyExecuteRunner) runAuthorizedPolicy(keySign *tpm2.Public, policyRe
 	defer authKey.Flush()
 
 	tbs := ComputePolicyAuthorizationTBSDigest(keySign.Name().Algorithm().GetHash(), approvedPolicy, policyRef)
-	ticket, err := r.tpm.VerifySignature(authKey.Resource(), tbs, auth.Signature)
+	ticket, err := r.tpm.VerifySignature(authKey, tbs, auth.Signature)
 	if err != nil {
 		return nil, nil, err
 	}

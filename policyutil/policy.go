@@ -403,7 +403,7 @@ func (e *policyNVElement) run(runner policyRunner) (err error) {
 
 	params := &authorizationCommandParams{
 		commandCode: tpm2.CommandPolicyNV,
-		handles:     []NamedHandle{auth.Resource(), nvIndex, runner.session().Name()},
+		handles:     []NamedHandle{auth, nvIndex, runner.session().Name()},
 		params:      []any{e.OperandB, e.Offset, e.Operation},
 	}
 
@@ -417,7 +417,7 @@ func (e *policyNVElement) run(runner policyRunner) (err error) {
 	}
 	defer authSession.Flush()
 
-	if err := runner.session().PolicyNV(auth.Resource(), nvIndex, e.OperandB, e.Offset, e.Operation, authSession.Session()); err != nil {
+	if err := runner.session().PolicyNV(auth, nvIndex, e.OperandB, e.Offset, e.Operation, authSession.Session()); err != nil {
 		return &PolicyNVError{Index: nvIndex.Handle(), Name: nvIndex.Name(), err: err}
 	}
 
@@ -463,7 +463,7 @@ func (e *policySecretElement) run(runner policyRunner) (err error) {
 
 	params := &authorizationCommandParams{
 		commandCode: tpm2.CommandPolicySecret,
-		handles:     []NamedHandle{authObject.Resource(), runner.session().Name()},
+		handles:     []NamedHandle{authObject, runner.session().Name()},
 		params:      []any{e.CpHashA, e.PolicyRef, e.Expiration},
 	}
 
@@ -477,7 +477,7 @@ func (e *policySecretElement) run(runner policyRunner) (err error) {
 	}
 	defer authSession.Flush()
 
-	timeout, ticket, err := runner.session().PolicySecret(authObject.Resource(), e.CpHashA, e.PolicyRef, e.Expiration, authSession.Session())
+	timeout, ticket, err := runner.session().PolicySecret(authObject, e.CpHashA, e.PolicyRef, e.Expiration, authSession.Session())
 	if err != nil {
 		return &PolicyAuthorizationError{AuthName: e.AuthObjectName, PolicyRef: e.PolicyRef, err: err}
 	}
@@ -543,7 +543,7 @@ func (e *policySignedElement) run(runner policyRunner) error {
 		includeNonceTPM = true
 	}
 
-	timeout, ticket, err := runner.session().PolicySigned(authKey.Resource(), includeNonceTPM, auth.CpHash, e.PolicyRef, auth.Expiration, auth.PolicyAuthorization.Signature)
+	timeout, ticket, err := runner.session().PolicySigned(authKey, includeNonceTPM, auth.CpHash, e.PolicyRef, auth.Expiration, auth.PolicyAuthorization.Signature)
 	if err != nil {
 		return &PolicyAuthorizationError{AuthName: authKeyName, PolicyRef: e.PolicyRef, err: err}
 	}
