@@ -693,8 +693,8 @@ func (r *executePolicyResources) authorizedPolicies(keySign tpm2.Name, policyRef
 	return policies, nil
 }
 
-func (r *executePolicyResources) signedAuthorization(authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
-	return r.resources.SignedAuthorization(r.session.Session().Params().HashAlg, r.session.Session().State().NonceTPM, authKey, policyRef)
+func (r *executePolicyResources) signedAuthorization(hashAlg tpm2.HashAlgorithmId, nonceTPM tpm2.Nonce, authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
+	return r.resources.SignedAuthorization(hashAlg, nonceTPM, authKey, policyRef)
 }
 
 // AuthorizedPolicies provides a way for [Policy.Branches], [Policy.Details] and

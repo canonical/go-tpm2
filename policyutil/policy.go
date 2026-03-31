@@ -167,6 +167,12 @@ func (e *PolicyAuthorizationError) Unwrap() error {
 	return e.err
 }
 
+// ErrPolicySignedConstraint is returned from [Policy.Execute] if the policy uses TPM2_PolicySigned,
+// [WithSessionUsageCommandConstraint] is used and the signed authorization returned from the
+// supplied [PolicyExecuteResources] specifies an incompatible cpHash. This will be wrapped in
+// a *[PolicyAuthorizationError] which indicates the assertion that the error occurred for.
+var ErrPolicySignedConstraint = errors.New("the signed authorization has a cpHash that is incompatible with the specified usage constraints")
+
 // ResourceLoadError is returned from [Policy.Execute] if the policy uses TPM2_PolicySecret
 // and the associated resource could not be loaded. If loading the resource required
 // authorization with a policy session and that failed, this will wrap another *[PolicyError].
@@ -311,7 +317,6 @@ type policyTickets interface {
 type policyResources interface {
 	loadedResource(name tpm2.Name) (ResourceContext, error)
 	authorizedPolicies(keySign tpm2.Name, policyRef tpm2.Nonce) ([]*Policy, error)
-	signedAuthorization(authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error)
 }
 
 type policyRunner interface {
@@ -324,6 +329,7 @@ type policyRunner interface {
 	authorize(auth ResourceContext, askForPolicy bool, params *authorizationCommandParams, prefer tpm2.SessionType) (SessionContext, error)
 	runBranch(branches policyBranches) (selected int, err error)
 	runAuthorizedPolicy(keySign *tpm2.Public, policyRef tpm2.Nonce, policies []*authorizedPolicy) (approvedPolicy tpm2.Digest, checkTicket *tpm2.TkVerified, err error)
+	signedAuthorization(authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error)
 	notifyPolicyPCRDigest() error
 }
 
@@ -517,7 +523,7 @@ func (e *policySignedElement) run(runner policyRunner) error {
 		}
 	}
 
-	auth, err := runner.resources().signedAuthorization(authKeyName, e.PolicyRef)
+	auth, err := runner.signedAuthorization(authKeyName, e.PolicyRef)
 	if err != nil {
 		return &PolicyAuthorizationError{
 			AuthName:  authKeyName,
@@ -1055,10 +1061,6 @@ func (r *mockPolicyResources) authorizedPolicies(keySign tpm2.Name, policyRef tp
 		return nil, nil
 	}
 	return r.authorized.AuthorizedPolicies(keySign, policyRef)
-}
-
-func (*mockPolicyResources) signedAuthorization(authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
-	return new(PolicySignedAuthorization), nil
 }
 
 // Policy corresponds to an authorization policy. It can be serialized with

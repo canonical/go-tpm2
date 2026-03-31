@@ -99,6 +99,10 @@ func (r *policyValidateRunner) runAuthorizedPolicy(keySign *tpm2.Public, policyR
 	return nil, nil, nil
 }
 
+func (r *policyValidateRunner) signedAuthorization(authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
+	return new(PolicySignedAuthorization), nil
+}
+
 func (r *policyValidateRunner) notifyPolicyPCRDigest() error {
 	return nil
 }

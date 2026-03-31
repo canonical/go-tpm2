@@ -54,6 +54,10 @@ func (r *policyBuilderBranchRunner) runAuthorizedPolicy(keySign *tpm2.Public, po
 	return nil, nil, nil
 }
 
+func (r *policyBuilderBranchRunner) signedAuthorization(authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
+	return new(PolicySignedAuthorization), nil
+}
+
 func (r *policyBuilderBranchRunner) notifyPolicyPCRDigest() error {
 	return nil
 }

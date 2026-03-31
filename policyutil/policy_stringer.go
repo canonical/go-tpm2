@@ -248,6 +248,10 @@ func (r *policyStringifierRunner) runAuthorizedPolicy(keySign *tpm2.Public, poli
 	return nil, nil, nil
 }
 
+func (r *policyStringifierRunner) signedAuthorization(authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
+	return new(PolicySignedAuthorization), nil
+}
+
 func (r *policyStringifierRunner) notifyPolicyPCRDigest() error {
 	return nil
 }

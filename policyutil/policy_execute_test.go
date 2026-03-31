@@ -10,6 +10,7 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -2556,6 +2557,23 @@ func (s *policyExecuteSuite) TestPolicyBranchesEmbeddedNodesAutoSelectWithUsage3
 		expectedCommandCode:      tpm2.CommandNVChangeAuth})
 }
 
+func (s *policyExecuteSuite) TestPolicyBranchesEmbeddedNodesAutoSelectWithUsage4(c *C) {
+	s.testPolicyBranchesEmbeddedNodes(c, &testExecutePolicyBranchesEmbeddedNodesData{
+		constraints: []PolicyExecuteOption{
+			WithSessionUsageCommandCodeConstraint(tpm2.CommandNVWriteLock),
+		},
+		expectedCommands: tpm2.CommandCodeList{
+			tpm2.CommandPolicyNvWritten,
+			tpm2.CommandPolicyAuthValue,
+			tpm2.CommandPolicyCommandCode,
+			tpm2.CommandPolicyOR,
+			tpm2.CommandPolicyOR,
+		},
+		expectedRequireAuthValue: true,
+		expectedPath:             "branch1/branch3",
+		expectedCommandCode:      tpm2.CommandNVWriteLock})
+}
+
 func (s *policyExecuteSuite) TestPolicyBranchesEmbeddedNodesAutoSelectWildcard1(c *C) {
 	s.testPolicyBranchesEmbeddedNodes(c, &testExecutePolicyBranchesEmbeddedNodesData{
 		constraints: []PolicyExecuteOption{
@@ -3224,6 +3242,121 @@ func (s *policyExecuteSuite) TestPolicyBranchesNVAutoSelectedFail(c *C) {
 	var pe *PolicyError
 	c.Assert(err, internal_testutil.ErrorAs, &pe)
 	c.Check(pe.Path, Equals, "")
+}
+
+type testPolicyExecuteSignedCommandConstraintsParams struct {
+	cpHash      CpHash
+	constraints []PolicyExecuteOption
+}
+
+func (s *policyExecuteSuite) testPolicySignedCommandConstraints(c *C, params *testPolicyExecuteSignedCommandConstraintsParams) error {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	c.Assert(err, IsNil)
+
+	pubKey, err := objectutil.NewECCPublicKey(&key.PublicKey)
+	c.Assert(err, IsNil)
+
+	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+
+	builder.RootBranch().AddBranchNode(func(n *PolicyBuilderBranchNode) {
+		n.AddBranch("branch1", func(b *PolicyBuilderBranch) {
+			b.PolicyCommandCode(tpm2.CommandNVChangeAuth)
+			b.PolicyAuthValue()
+		})
+		n.AddBranch("branch2", func(b *PolicyBuilderBranch) {
+			b.PolicyCommandCode(tpm2.CommandNVWriteLock)
+			b.PolicySigned(pubKey, []byte("foo"))
+		})
+	})
+
+	expectedDigest, policy, err := builder.Policy()
+	c.Assert(err, IsNil)
+
+	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
+
+	signedAuthorizer := func(sessionAlg tpm2.HashAlgorithmId, sessionNonce tpm2.Nonce, authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
+		return SignPolicySignedAuthorization(rand.Reader, &PolicySignedParams{HashAlg: tpm2.HashAlgorithmSHA256, CpHash: params.cpHash}, pubKey, []byte("foo"), key, crypto.SHA256)
+	}
+
+	opts := []PolicyExecuteOption{
+		WithResources(s.TPM, WithSignedAuthorizer(signedAuthorizer)),
+		WithTPMHelper(s.TPM),
+	}
+	opts = append(opts, params.constraints...)
+
+	result, err := policy.Execute(
+		NewPolicyExecuteSession(s.TPM, session),
+		opts...,
+	)
+	if err != nil {
+		return err
+	}
+	c.Check(result.NewTickets, internal_testutil.LenEquals, 0)
+	c.Check(result.InvalidTickets, internal_testutil.LenEquals, 0)
+	c.Check(result.AuthValueNeeded, Equals, false)
+	c.Check(result.Path, Equals, "branch2")
+	code, set := result.CommandCode()
+	c.Check(set, internal_testutil.IsTrue)
+	c.Check(code, Equals, tpm2.CommandNVWriteLock)
+	cpHash, set := result.CpHash()
+	c.Check(set, Equals, params.cpHash != nil)
+	if set {
+		expectedCpHash, err := params.cpHash.Digest(tpm2.HashAlgorithmSHA256)
+		c.Assert(err, IsNil)
+		c.Check(cpHash, DeepEquals, expectedCpHash)
+	}
+	_, set = result.NameHash()
+	c.Check(set, internal_testutil.IsFalse)
+	_, set = result.NvWritten()
+	c.Check(set, internal_testutil.IsFalse)
+
+	digest, err := s.TPM.PolicyGetDigest(session)
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, expectedDigest)
+
+	return nil
+}
+
+func (s *policyExecuteSuite) TestPolicySignedCommandConstraintsNoConstraintsNoCpHash(c *C) {
+	err := s.testPolicySignedCommandConstraints(c, &testPolicyExecuteSignedCommandConstraintsParams{
+		constraints: []PolicyExecuteOption{WithSessionUsageNoAuthValueConstraint()},
+	})
+	c.Check(err, IsNil)
+}
+
+func (s *policyExecuteSuite) TestPolicySignedCommandConstraintsWithConstraintsNoCpHash(c *C) {
+	err := s.testPolicySignedCommandConstraints(c, &testPolicyExecuteSignedCommandConstraintsParams{
+		constraints: []PolicyExecuteOption{
+			WithSessionUsageCommandConstraint(tpm2.CommandNVWriteLock, []NamedHandle{tpm2.NewResourceContext(0x01000000, append(tpm2.Name{0x00, 0x0b}, make(tpm2.Name, 32)...)), tpm2.NewResourceContext(0x01000000, append(tpm2.Name{0x00, 0x0b}, make(tpm2.Name, 32)...))}),
+		},
+	})
+	c.Check(err, IsNil)
+}
+
+func (s *policyExecuteSuite) TestPolicySignedCommandConstraintsWithConstraintsAndCpHash(c *C) {
+	err := s.testPolicySignedCommandConstraints(c, &testPolicyExecuteSignedCommandConstraintsParams{
+		cpHash: CommandParameters(tpm2.CommandNVWriteLock, []Named{append(tpm2.Name{0x00, 0x0b}, make(tpm2.Name, 32)...), append(tpm2.Name{0x00, 0x0b}, make(tpm2.Name, 32)...)}),
+		constraints: []PolicyExecuteOption{
+			WithSessionUsageCommandConstraint(tpm2.CommandNVWriteLock, []NamedHandle{tpm2.NewResourceContext(0x01000000, append(tpm2.Name{0x00, 0x0b}, make(tpm2.Name, 32)...)), tpm2.NewResourceContext(0x01000000, append(tpm2.Name{0x00, 0x0b}, make(tpm2.Name, 32)...))}),
+		},
+	})
+	c.Check(err, IsNil)
+}
+
+func (s *policyExecuteSuite) TestPolicySignedCommandConstraintsWithMismatchedConstraintsAndCpHash(c *C) {
+	err := s.testPolicySignedCommandConstraints(c, &testPolicyExecuteSignedCommandConstraintsParams{
+		cpHash: CommandParameters(tpm2.CommandNVWriteLock, []Named{tpm2.MakeHandleName(tpm2.HandleOwner), append(tpm2.Name{0x00, 0x0b}, make(tpm2.Name, 32)...)}),
+		constraints: []PolicyExecuteOption{
+			WithSessionUsageCommandConstraint(tpm2.CommandNVWriteLock, []NamedHandle{tpm2.NewResourceContext(0x01000000, append(tpm2.Name{0x00, 0x0b}, make(tpm2.Name, 32)...)), tpm2.NewResourceContext(0x01000000, append(tpm2.Name{0x00, 0x0b}, make(tpm2.Name, 32)...))}),
+		},
+	})
+	c.Check(err, ErrorMatches, `cannot run 'TPM2_PolicySigned assertion' task in branch 'branch2': cannot complete authorization with authName=0x([[:xdigit:]]{68}), policyRef=0x666f6f: cannot obtain signed authorization: the signed authorization has a cpHash that is incompatible with the specified usage constraints`)
+	var pe *PolicyError
+	c.Assert(err, internal_testutil.ErrorAs, &pe)
+	c.Check(pe.Path, Equals, "branch2")
+	var ae *PolicyAuthorizationError
+	c.Assert(err, internal_testutil.ErrorAs, &ae)
+	c.Check(errors.Is(ae, ErrPolicySignedConstraint), internal_testutil.IsTrue)
 }
 
 type policyExecuteSuitePCR struct {

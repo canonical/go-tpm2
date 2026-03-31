@@ -98,6 +98,10 @@ func (r *policyComputeRunner) runAuthorizedPolicy(keySign *tpm2.Public, policyRe
 	return nil, nil, nil
 }
 
+func (r *policyComputeRunner) signedAuthorization(authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
+	return new(PolicySignedAuthorization), nil
+}
+
 func (r *policyComputeRunner) notifyPolicyPCRDigest() error {
 	return fmt.Errorf("cannot compute digest for policies with TPM2_PolicyPCR assertions which contain pre-computed digests")
 }

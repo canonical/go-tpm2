@@ -197,6 +197,10 @@ func (w *treeWalker) runAuthorizedPolicy(keySign *tpm2.Public, policyRef tpm2.No
 	return nil, nil, nil
 }
 
+func (r *treeWalker) signedAuthorization(authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
+	return new(PolicySignedAuthorization), nil
+}
+
 func (r *treeWalker) notifyPolicyPCRDigest() error {
 	return nil
 }

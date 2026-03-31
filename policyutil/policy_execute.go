@@ -399,6 +399,25 @@ func (r *policyExecuteRunner) runAuthorizedPolicy(keySign *tpm2.Public, policyRe
 	return approvedPolicy, ticket, nil
 }
 
+func (r *policyExecuteRunner) signedAuthorization(authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
+	auth, err := r.policyResources.signedAuthorization(r.policySessionContext.Session().Params().HashAlg, r.policySessionContext.Session().State().NonceTPM, authKey, policyRef)
+	if err != nil {
+		return nil, err
+	}
+
+	if r.usage.canCpHash() && len(auth.CpHash) > 0 {
+		usageCpHash, err := r.usage.cpHash(r.policySessionContext.Session().Params().HashAlg)
+		if err != nil {
+			return nil, fmt.Errorf("cannot obtain cpHash from usage parameters: %w", err)
+		}
+		if !bytes.Equal(usageCpHash, auth.CpHash) {
+			return nil, ErrPolicySignedConstraint
+		}
+	}
+
+	return auth, nil
+}
+
 func (r *policyExecuteRunner) notifyPolicyPCRDigest() error {
 	return nil
 }
