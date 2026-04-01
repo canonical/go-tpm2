@@ -167,12 +167,6 @@ func (e *PolicyAuthorizationError) Unwrap() error {
 	return e.err
 }
 
-// ErrPolicySignedConstraint is returned from [Policy.Execute] if the policy uses TPM2_PolicySigned,
-// [WithSessionUsageCommandConstraint] is used and the signed authorization returned from the
-// supplied [PolicyExecuteResources] specifies an incompatible cpHash. This will be wrapped in
-// a *[PolicyAuthorizationError] which indicates the assertion that the error occurred for.
-var ErrPolicySignedConstraint = errors.New("the signed authorization has a cpHash that is incompatible with the specified usage constraints")
-
 // ResourceLoadError is returned from [Policy.Execute] if the policy uses TPM2_PolicySecret
 // and the associated resource could not be loaded. If loading the resource required
 // authorization with a policy session and that failed, this will wrap another *[PolicyError].

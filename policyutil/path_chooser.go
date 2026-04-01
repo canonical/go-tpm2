@@ -682,6 +682,8 @@ func (e *policyPathChooserTreeWalkError) Unwrap() error {
 
 func (*policyPathChooserTreeWalkError) isPolicyDelimiterError() {}
 
+var errNoAppropriatePath = errors.New("no appropriate path")
+
 func (s *policyPathChooser) choose(branches policyBranches) (policyBranchPath, error) {
 	// reset state
 	s.walkResult = &policyPathChooserTreeWalkerResult{
@@ -689,6 +691,10 @@ func (s *policyPathChooser) choose(branches policyBranches) (policyBranchPath, e
 		missingAuthorized: make(map[policyBranchPath]struct{}),
 	}
 	s.nvCheckedOk = make(map[nvAssertionMapKey]struct{})
+
+	if len(branches) == 0 {
+		return "", errNoAppropriatePath
+	}
 
 	walker := newTreeWalker(s, &policyPathChooserTreeWalkerBranchNodeContext{
 		alg:    s.sessionAlg,
@@ -731,7 +737,7 @@ func (s *policyPathChooser) choose(branches policyBranches) (policyBranchPath, e
 	}
 
 	if len(candidates) == 0 {
-		return "", errors.New("no appropriate paths found")
+		return "", errNoAppropriatePath
 	}
 
 	// Provisionally select the first path

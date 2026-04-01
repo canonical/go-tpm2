@@ -10,7 +10,6 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -2640,11 +2639,13 @@ func (s *policyExecuteSuite) TestPolicyBranchesSelectorOutOfRange(c *C) {
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
 	_, err = policy.Execute(NewPolicyExecuteSession(s.TPM, session), WithPathConstraint("{2}"))
-	c.Check(err, ErrorMatches, `cannot run 'branch node' task in root branch: no branch with name that matches pattern "\{2\}"`)
+	c.Check(err, ErrorMatches, `cannot run 'branch node' task in root branch: no appropriate path is available using selector pattern "\{2\}"`)
 
 	var pe *PolicyError
 	c.Assert(err, internal_testutil.ErrorAs, &pe)
 	c.Check(pe.Path, Equals, "")
+	var nape *NoAppropriatePathError
+	c.Check(pe, internal_testutil.ErrorAs, &nape)
 }
 
 func (s *policyExecuteSuite) TestPolicyBranchesBranchNotFound(c *C) {
@@ -2669,11 +2670,13 @@ func (s *policyExecuteSuite) TestPolicyBranchesBranchNotFound(c *C) {
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
 	_, err = policy.Execute(NewPolicyExecuteSession(s.TPM, session), WithPathConstraint("foo"))
-	c.Check(err, ErrorMatches, `cannot run 'branch node' task in root branch: no branch with name that matches pattern "foo"`)
+	c.Check(err, ErrorMatches, `cannot run 'branch node' task in root branch: no appropriate path is available using selector pattern "foo"`)
 
 	var pe *PolicyError
 	c.Assert(err, internal_testutil.ErrorAs, &pe)
 	c.Check(pe.Path, Equals, "")
+	var nape *NoAppropriatePathError
+	c.Check(pe, internal_testutil.ErrorAs, &nape)
 }
 
 func (s *policyExecuteSuite) TestPolicyBranchesMissingBranchDigests(c *C) {
@@ -3237,11 +3240,13 @@ func (s *policyExecuteSuite) TestPolicyBranchesNVAutoSelectedFail(c *C) {
 		WithResources(s.TPM, WithPersistentResources(persistent)),
 		WithTPMHelper(s.TPM),
 	)
-	c.Check(err, ErrorMatches, `cannot run 'branch node' task in root branch: cannot automatically choose path from branches: no appropriate paths found`)
+	c.Check(err, ErrorMatches, `cannot run 'branch node' task in root branch: no appropriate path is available`)
 
 	var pe *PolicyError
 	c.Assert(err, internal_testutil.ErrorAs, &pe)
 	c.Check(pe.Path, Equals, "")
+	var nape *NoAppropriatePathError
+	c.Check(pe, internal_testutil.ErrorAs, &nape)
 }
 
 type testPolicyExecuteSignedCommandConstraintsParams struct {
@@ -3356,7 +3361,7 @@ func (s *policyExecuteSuite) TestPolicySignedCommandConstraintsWithMismatchedCon
 	c.Check(pe.Path, Equals, "branch2")
 	var ae *PolicyAuthorizationError
 	c.Assert(err, internal_testutil.ErrorAs, &ae)
-	c.Check(errors.Is(ae, ErrPolicySignedConstraint), internal_testutil.IsTrue)
+	c.Check(ae, internal_testutil.ErrorIs, ErrPolicySignedConstraint)
 }
 
 type policyExecuteSuitePCR struct {
@@ -3439,9 +3444,11 @@ func (s *policyExecuteSuitePCR) TestPolicyBranchesAutoSelectFail(c *C) {
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
 	_, err = policy.Execute(NewPolicyExecuteSession(s.TPM, session), WithTPMHelper(s.TPM))
-	c.Check(err, ErrorMatches, `cannot run 'branch node' task in root branch: cannot automatically choose path from branches: no appropriate paths found`)
+	c.Check(err, ErrorMatches, `cannot run 'branch node' task in root branch: no appropriate path is available`)
 
 	var pe *PolicyError
 	c.Assert(err, internal_testutil.ErrorAs, &pe)
 	c.Check(pe.Path, Equals, "")
+	var nape *NoAppropriatePathError
+	c.Check(pe, internal_testutil.ErrorAs, &nape)
 }

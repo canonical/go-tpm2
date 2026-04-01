@@ -8,6 +8,32 @@ import (
 	"github.com/canonical/go-tpm2"
 )
 
+var (
+	// ErrPolicySignedConstraint is returned from [Policy.Execute] if the policy uses TPM2_PolicySigned,
+	// [WithSessionUsageCommandConstraint] is used and the signed authorization returned from the
+	// supplied [PolicyExecuteResources] specifies an incompatible cpHash. This will be wrapped in
+	// a *[PolicyAuthorizationError] which indicates the assertion that the error occurred for.
+	ErrPolicySignedConstraint = errors.New("the signed authorization has a cpHash that is incompatible with the specified usage constraints")
+)
+
+// NoAppropriatePathError is returned from [Policy.Execute] if a branch node or authorized policy is
+// encountered without the branch or authorized policy being chosen explicitly via the
+// [WithPathConstraint] option when an appropriate path through the policy is not available to
+// choose automatically, because of a combination of current conditions, constraints, and any pattern
+// supplied to [WithPathConstraint].
+type NoAppropriatePathError struct {
+	pattern string
+}
+
+// Error implements [error].
+func (e *NoAppropriatePathError) Error() string {
+	msg := "no appropriate path is available"
+	if e.pattern != "" {
+		msg += fmt.Sprintf(" using selector pattern %q", e.pattern)
+	}
+	return msg
+}
+
 type executePolicyTickets struct {
 	usageCpHash tpm2.Digest
 
@@ -444,8 +470,6 @@ func (r *policyExecuteRunner) selectBranch(branches policyBranches) (int, string
 	var selected int
 
 	switch len(candidateIndices) {
-	case 0:
-		return 0, "", fmt.Errorf("no branch with name that matches pattern %q", next) // next is never empty here
 	case 1:
 		selected = candidateIndices[0]
 		r.remaining = remaining
@@ -457,12 +481,11 @@ func (r *policyExecuteRunner) selectBranch(branches policyBranches) (int, string
 		}
 
 		path, err := r.pathChooser.choose(candidateBranches)
-		if err != nil {
-			var patternStr string
-			if next != "" {
-				patternStr = fmt.Sprintf(" with pattern %q", next)
-			}
-			return 0, "", fmt.Errorf("cannot automatically choose path from branches%s: %w", patternStr, err)
+		switch {
+		case errors.Is(err, errNoAppropriatePath):
+			return 0, "", &NoAppropriatePathError{pattern: next}
+		case err != nil:
+			return 0, "", fmt.Errorf("cannot automatically choose path: %w", err)
 		}
 
 		switch next {
