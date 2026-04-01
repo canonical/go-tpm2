@@ -186,4 +186,13 @@ Policy {
  )
  PolicyCommandCode(TPM_CC_NV_ChangeAuth)
 }`, expectedDigestSHA256, pHashListSHA256[0], pHashListSHA256[1]))
+
+	digest, err = policy.Digest(tpm2.HashAlgorithmSHA256)
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, expectedDigestSHA256)
+
+	c.Check(policy.DigestAlgs(), DeepEquals, []tpm2.HashAlgorithmId{
+		tpm2.HashAlgorithmSHA1,
+		tpm2.HashAlgorithmSHA256,
+	})
 }

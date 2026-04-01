@@ -397,6 +397,26 @@ Policy {
 }`, expectedDigestSHA1, keySign.Name()))
 }
 
+func (s *policySuiteNoTPM) TestPolicyDigestAlgs1(c *C) {
+	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+	builder.RootBranch().PolicyAuthValue()
+
+	_, policy, err := builder.Policy()
+	c.Assert(err, IsNil)
+
+	c.Check(policy.DigestAlgs(), DeepEquals, []tpm2.HashAlgorithmId{tpm2.HashAlgorithmSHA256})
+}
+
+func (s *policySuiteNoTPM) TestPolicyDigestAlgs2(c *C) {
+	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA1)
+	builder.RootBranch().PolicyAuthValue()
+
+	_, policy, err := builder.Policy()
+	c.Assert(err, IsNil)
+
+	c.Check(policy.DigestAlgs(), DeepEquals, []tpm2.HashAlgorithmId{tpm2.HashAlgorithmSHA1})
+}
+
 func (s *policySuiteNoTPM) TestPolicyDigest1(c *C) {
 	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
 	builder.RootBranch().PolicyAuthValue()

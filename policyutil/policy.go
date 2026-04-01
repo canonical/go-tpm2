@@ -1088,6 +1088,15 @@ func (p *Policy) Unmarshal(r io.Reader) error {
 	return nil
 }
 
+// DigestAlgs returns the digest algorithms that this policy has been computed for.
+func (p *Policy) DigestAlgs() []tpm2.HashAlgorithmId {
+	var digests []tpm2.HashAlgorithmId
+	for _, digest := range p.policy.PolicyDigests {
+		digests = append(digests, digest.HashAlg)
+	}
+	return digests
+}
+
 // Digest returns the digest for this policy for the specified algorithm, if it
 // has been computed. If it hasn't been computed, ErrMissingDigest is returned.
 func (p *Policy) Digest(alg tpm2.HashAlgorithmId) (tpm2.Digest, error) {
