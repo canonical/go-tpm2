@@ -396,19 +396,19 @@ func (c *tpmSimulatorLaunchContext) launch(opts *TPMSimulatorOptions) error {
 	// directory in XDG_RUNTIME_DIR because snaps have their own private tpmdir. For this,
 	// we need to know the name of the snap if the simulator belongs to one.
 	mssimSnapName := ""
-	for currentPath, lastPath := mssimPath, ""; currentPath != ""; {
+	for currentPath := mssimPath; currentPath != ""; {
 		dest, err := os.Readlink(currentPath)
 		switch {
 		case err != nil:
-			if filepath.Base(currentPath) == "snap" {
-				mssimSnapName, _ = snap.SplitSnapApp(filepath.Base(lastPath))
-			}
 			currentPath = ""
 		default:
 			if !filepath.IsAbs(dest) {
 				dest = filepath.Join(filepath.Dir(currentPath), dest)
 			}
-			lastPath = currentPath
+			if filepath.Base(dest) == "snap" {
+				mssimSnapName, _ = snap.SplitSnapApp(filepath.Base(currentPath))
+				dest = ""
+			}
 			currentPath = dest
 		}
 	}
