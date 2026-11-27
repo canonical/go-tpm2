@@ -1,0 +1,28 @@
+From 421f697275b8fd4e91c916b282eb788662c8bbd5 Mon Sep 17 00:00:00 2001
+From: Dmitrii Kuvaiskii <dmitrii.kuvaiskii@canonical.com>
+Date: Thu, 26 Nov 2026 11:51:03 +0500
+Subject: [PATCH 3/3] Ossl: allow building against OpenSSL 3.x newer than 3.1
+
+The bignum_st definition in BnToOsslMath.h is unchanged in OpenSSL 3.5
+(checked against 3.0.13 and 3.5.5), so the version guard that rejects
+OpenSSL >= 3.1 is too strict. Raise it to 4.0, the next major version.
+---
+ TPMCmd/tpm/cryptolibs/Ossl/include/Ossl/BnToOsslMath.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/TPMCmd/tpm/cryptolibs/Ossl/include/Ossl/BnToOsslMath.h b/TPMCmd/tpm/cryptolibs/Ossl/include/Ossl/BnToOsslMath.h
+index 6c73a45..0000292 100644
+--- a/TPMCmd/tpm/cryptolibs/Ossl/include/Ossl/BnToOsslMath.h
++++ b/TPMCmd/tpm/cryptolibs/Ossl/include/Ossl/BnToOsslMath.h
+@@ -17,7 +17,7 @@
+ #include <openssl/ec.h>
+ #include <openssl/bn.h>
+ 
+-#if OPENSSL_VERSION_NUMBER >= 0x30100000L
++#if OPENSSL_VERSION_NUMBER >= 0x40000000L
+ // Check the bignum_st definition against the one below and either update the
+ // version check or provide the new definition for this version.
+ #  error Untested OpenSSL version
+-- 
+2.53.0
+
