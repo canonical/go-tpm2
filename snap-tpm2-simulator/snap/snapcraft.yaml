@@ -1,0 +1,70 @@
+name: tpm2-simulator
+title: TPM 2.0 Reference Simulator
+summary: TPM 2.0 Reference Simulator
+description: |
+  A TPM 2.0 simulator based on the official TCG reference implementation of
+  the TPM 2.0 specification (https://github.com/microsoft/ms-tpm-20-ref).
+
+  This snap is used for running the unit tests of go-tpm2
+  (https://github.com/canonical/go-tpm2) and its consumers. It is NOT a
+  secure TPM and must not be used to protect any real secret.
+
+  The upstream project is https://github.com/microsoft/ms-tpm-20-ref. This
+  snap recipe is hosted in the go-tpm2 repository (directory
+  snap-tpm2-simulator/) only for convenience, because go-tpm2 and its
+  consumers are its sole users; it is otherwise unrelated to go-tpm2. Report
+  packaging problems in the go-tpm2 issue tracker, and simulator bugs
+  upstream. In the future, we may want to collaborate with Microsoft
+  maintainers and move the snap recipe into the upstream project itself.
+
+  The simulator is built from an unmodified upstream release plus the patches
+  in the patches/ directory of this recipe.
+version: 'v1.83r1'
+license: BSD-2-Clause
+contact: dmitrii.kuvaiskii@canonical.com
+issues: https://github.com/canonical/go-tpm2/issues
+source-code: https://github.com/canonical/go-tpm2/tree/master/snap-tpm2-simulator
+website: https://github.com/microsoft/ms-tpm-20-ref
+base: core26
+grade: stable
+confinement: strict
+
+platforms:
+  amd64:
+  arm64:
+
+apps:
+  tpm2-simulator:
+    command: usr/bin/tpm2-simulator
+    plugs:
+      - home
+      - network-bind
+
+parts:
+  ms-tpm-20-ref:
+    plugin: nil
+    source: https://github.com/microsoft/ms-tpm-20-ref.git
+    source-type: git
+    # v1.83r1
+    source-commit: ee21db0a941decd3cac67925ea3310873af60ab3
+    build-packages:
+      - autoconf
+      - autoconf-archive
+      - automake
+      - gcc
+      - libssl-dev
+      - libtool
+      - make
+      - patch
+      - pkgconf
+    override-pull: |
+      craftctl default
+      for p in "$CRAFT_PROJECT_DIR"/patches/*.patch; do
+        patch -p1 --forward < "$p"
+      done
+    override-build: |
+      cd TPMCmd
+      ./bootstrap
+      ./configure --prefix=/usr
+      make -j"$CRAFT_PARALLEL_BUILD_COUNT"
+      make install DESTDIR="$CRAFT_PART_INSTALL"
