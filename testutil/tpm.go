@@ -380,15 +380,8 @@ func (c *tpmSimulatorLaunchContext) launch(opts *TPMSimulatorOptions) error {
 	}
 
 	// Search for a TPM simulator binary
-	mssimPath := ""
-	for _, p := range []string{"tpm2-simulator", "tpm2-simulator-chrisccoulson.tpm2-simulator"} {
-		var err error
-		mssimPath, err = exec.LookPath(p)
-		if err == nil {
-			break
-		}
-	}
-	if mssimPath == "" {
+	mssimPath, err := exec.LookPath("tpm2-simulator")
+	if err != nil {
 		return errors.New("cannot find a simulator binary")
 	}
 

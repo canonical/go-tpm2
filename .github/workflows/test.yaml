@@ -21,8 +21,8 @@ jobs:
         go-version: ${{ matrix.goversion }}
     - name: Install dependencies
       run: |
-          sudo snap install core core18
-          sudo snap install tpm2-simulator-chrisccoulson
+          sudo snap install core
+          sudo snap install tpm2-simulator
     - name: Checkout code
       uses: actions/checkout@v3
     - name: Cache Go dependencies
